@@ -2,7 +2,7 @@
 {{
     config(
         materialized = "incremental",
-        unique_key   = "weather_id",
+        unique_key   = "\"weather_id\"",
         incremental_strategy = "merge",
         on_schema_change = "append_new_columns"
     )

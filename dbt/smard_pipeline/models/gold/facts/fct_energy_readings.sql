@@ -2,7 +2,7 @@
 {{
     config(
         materialized         = "incremental",
-        unique_key           = "reading_id",
+        unique_key           = "\"reading_id\"",
         incremental_strategy = "merge",
         on_schema_change     = "append_new_columns"
     )
@@ -58,7 +58,7 @@ select
     w."solar_category",
     w."temp_category",
     e."_silver_processed_at",
-    current_timestamp()                        as dbt_processed_at
+    current_timestamp() as dbt_processed_at
 
 from energy e
 left join weather w

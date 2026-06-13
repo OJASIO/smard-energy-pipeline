@@ -2,19 +2,15 @@
 {{
     config(
         materialized         = "incremental",
-        unique_key           = ["agg_date", "region"],
+        unique_key           = "agg_id",
         incremental_strategy = "merge",
         on_schema_change     = "append_new_columns"
     )
 }}
 
-/*
-agg_regional_comparison - Regional generation comparison
-Compare generation across 5 German control zones
-Key for regional energy planning dashboard
-*/
-
 select
+    md5(cast("reading_date" as varchar)
+        || cast("region" as varchar))          as agg_id,
     "reading_date"                             as agg_date,
     "region",
     "region_full",

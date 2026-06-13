@@ -2,19 +2,15 @@
 {{
     config(
         materialized         = "incremental",
-        unique_key           = ["agg_date", "region"],
+        unique_key           = "agg_id",
         incremental_strategy = "merge",
         on_schema_change     = "append_new_columns"
     )
 }}
 
-/*
-agg_renewable_share - Energiewende KPI
-Renewable share per day per region
-Key metric for German energy transition dashboard
-*/
-
 select
+    md5(cast("reading_date" as varchar)
+        || cast("region" as varchar))          as agg_id,
     "reading_date"                             as agg_date,
     "region",
     "region_full",
