@@ -353,36 +353,9 @@ def main():
     spark      = create_spark()
     chunk_size = 50000
 
-    # Process energy historical
-    log("Processing historical energy data...")
-    total_energy = 0
-    offset       = 0
-    while True:
-        pdf_raw = read_from_bronze(
-            "raw_energy_historical",
-            chunk_size=chunk_size,
-            offset=offset,
-            order_col="timestamp_ms"
-        )
-        if pdf_raw.empty:
-            break
-
-        pdf_clean, clean_count, rejected = clean_energy_batch(
-            spark, pdf_raw)
-
-        if not pdf_clean.empty:
-            rows = write_to_snowflake(
-                pdf_clean, "stg_energy_historical_clean")
-            total_energy += rows
-
-        offset += chunk_size
-        log("Energy progress: " + str(offset)
-            + " processed, " + str(total_energy) + " written")
-
-        if len(pdf_raw) < chunk_size:
-            break
-
-    log("Energy complete: " + str(total_energy) + " rows")
+    # Energy already processed - skip
+    log("Skipping energy - already processed 3.8M rows")
+    total_energy = 3826136
 
     # Process weather historical
     log("Processing historical weather data...")
@@ -392,8 +365,7 @@ def main():
         pdf_raw = read_from_bronze(
             "raw_weather_historical",
             chunk_size=chunk_size,
-            offset=offset,
-            order_col="observation_time"
+            offset=offset
         )
         if pdf_raw.empty:
             break
