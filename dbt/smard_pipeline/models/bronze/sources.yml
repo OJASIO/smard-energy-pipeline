@@ -22,3 +22,6 @@ sources:
 
       - name: stg_weather_historical_clean
         description: PySpark cleaned historical weather data 2023
+
+      - name: stg_cross_border_clean
+        description: PySpark cleaned cross-border electricity flows Germany
