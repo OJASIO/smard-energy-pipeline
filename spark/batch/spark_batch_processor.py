@@ -246,26 +246,125 @@ def clean_energy_batch(spark, pdf_raw):
 
     return df.toPandas(), clean_count, rejected
 
+def clean_weather_batch(spark, pdf_raw):
+    if pdf_raw.empty:
+        return pd.DataFrame(), 0, 0
+
+    from pyspark.sql.types import DoubleType
+    df = spark.createDataFrame(pdf_raw)
+    raw_count = df.count()
+
+    numeric_cols = [
+        "wind_speed_ms", "wind_direction", "wind_gusts_ms",
+        "solar_direct_wm2", "solar_diffuse_wm2",
+        "temperature_c", "cloud_cover_pct",
+        "precipitation_mm", "latitude", "longitude",
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df = df.withColumn(col, F.col(col).cast("double"))
+
+    df = df.dropna(subset=["region", "temperature_c"])
+    df = df.fillna({
+        "wind_speed_ms":    0.0,
+        "solar_direct_wm2": 0.0,
+        "precipitation_mm": 0.0,
+    })
+
+    df = df.filter(
+        (F.col("temperature_c") >= -50) &
+        (F.col("temperature_c") <= 60))
+    df = df.filter(
+        (F.col("wind_speed_ms") >= 0) &
+        (F.col("wind_speed_ms") <= 200))
+    df = df.filter(
+        (F.col("solar_direct_wm2") >= 0) &
+        (F.col("solar_direct_wm2") <= 1500))
+
+    df = df.dropDuplicates(["region", "observation_time"])
+
+    df = df.withColumn("wind_category",
+        F.when(F.col("wind_speed_ms") < 5,   "calm")
+         .when(F.col("wind_speed_ms") < 15,  "moderate")
+         .when(F.col("wind_speed_ms") < 25,  "strong")
+         .otherwise("storm"))
+
+    df = df.withColumn("solar_category",
+        F.when(F.col("solar_direct_wm2") == 0,  "night")
+         .when(F.col("solar_direct_wm2") < 100, "low")
+         .when(F.col("solar_direct_wm2") < 500, "medium")
+         .otherwise("high"))
+
+    df = df.withColumn("temp_category",
+        F.when(F.col("temperature_c") < 0,   "freezing")
+         .when(F.col("temperature_c") < 10,  "cold")
+         .when(F.col("temperature_c") < 20,  "mild")
+         .when(F.col("temperature_c") < 30,  "warm")
+         .otherwise("hot"))
+
+    region_map = F.create_map(
+        *[item for k, v in REGION_NAMES.items()
+          for item in [F.lit(k), F.lit(v)]])
+    df = df.withColumn("region_full",
+        F.coalesce(region_map[F.col("region")], F.col("region")))
+
+    # reading_ts_15min join key
+    # Weather is hourly so we use the hour timestamp
+    df = df.withColumn("reading_ts",
+        F.to_timestamp(F.col("reading_ts")))
+    df = df.withColumn("reading_ts_15min",
+        F.date_trunc("minute",
+            F.from_unixtime(
+                (F.unix_timestamp("reading_ts") / 900)
+                .cast("long") * 900)))
+
+    df = df.withColumn("weather_id",
+        F.md5(F.concat_ws("|",
+            F.col("reading_ts_15min").cast("string"),
+            F.col("region")
+        )))
+
+    now = datetime.now(tz=timezone.utc).isoformat()
+    df = df.withColumn("_silver_processed_at", F.lit(now))
+
+    for field in df.schema.fields:
+        col_name = field.name
+        if isinstance(field.dataType, DoubleType):
+            df = df.withColumn(col_name,
+                F.col(col_name).cast("double"))
+        else:
+            df = df.withColumn(col_name,
+                F.col(col_name).cast("string"))
+
+    clean_count = df.count()
+    rejected    = raw_count - clean_count
+    log("Weather cleaned: " + str(clean_count)
+        + " rows (" + str(rejected) + " rejected)")
+
+    return df.toPandas(), clean_count, rejected
+
+
 def main():
     log("=" * 55)
     log("SMARD Batch Processor")
     log("BigQuery Bronze -> PySpark -> Snowflake Silver")
     log("=" * 55)
 
-    spark       = create_spark()
-    total_rows  = 0
-    chunk_size  = 50000
-    offset      = 0
+    spark      = create_spark()
+    chunk_size = 50000
 
+    # Process energy historical
+    log("Processing historical energy data...")
+    total_energy = 0
+    offset       = 0
     while True:
         pdf_raw = read_from_bronze(
             "raw_energy_historical",
             chunk_size=chunk_size,
-            offset=offset
+            offset=offset,
+            order_col="timestamp_ms"
         )
-
         if pdf_raw.empty:
-            log("No more data to process")
             break
 
         pdf_clean, clean_count, rejected = clean_energy_batch(
@@ -274,17 +373,50 @@ def main():
         if not pdf_clean.empty:
             rows = write_to_snowflake(
                 pdf_clean, "stg_energy_historical_clean")
-            total_rows += rows
+            total_energy += rows
 
         offset += chunk_size
-        log(f"Progress: {offset:,} rows processed, "
-            f"{total_rows:,} written to Silver")
+        log("Energy progress: " + str(offset)
+            + " processed, " + str(total_energy) + " written")
 
         if len(pdf_raw) < chunk_size:
-            log("Last chunk processed")
             break
 
-    log(f"Batch processing complete: {total_rows:,} total rows")
+    log("Energy complete: " + str(total_energy) + " rows")
+
+    # Process weather historical
+    log("Processing historical weather data...")
+    total_weather = 0
+    offset        = 0
+    while True:
+        pdf_raw = read_from_bronze(
+            "raw_weather_historical",
+            chunk_size=chunk_size,
+            offset=offset,
+            order_col="observation_time"
+        )
+        if pdf_raw.empty:
+            break
+
+        pdf_clean, clean_count, rejected = clean_weather_batch(
+            spark, pdf_raw)
+
+        if not pdf_clean.empty:
+            rows = write_to_snowflake(
+                pdf_clean, "stg_weather_historical_clean")
+            total_weather += rows
+
+        offset += chunk_size
+        log("Weather progress: " + str(offset)
+            + " processed, " + str(total_weather) + " written")
+
+        if len(pdf_raw) < chunk_size:
+            break
+
+    log("Weather complete: " + str(total_weather) + " rows")
+    log("Batch processing complete!")
+    log("Energy: " + str(total_energy) + " rows")
+    log("Weather: " + str(total_weather) + " rows")
     spark.stop()
 
 if __name__ == "__main__":

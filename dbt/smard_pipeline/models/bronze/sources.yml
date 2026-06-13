@@ -15,7 +15,10 @@ sources:
         description: PySpark cleaned real-time energy stream data
 
       - name: stg_energy_historical_clean
-        description: PySpark cleaned historical energy data 2017-2024
+        description: PySpark cleaned historical energy data 2023
 
       - name: stg_weather_stream_clean
         description: PySpark cleaned real-time weather data
+
+      - name: stg_weather_historical_clean
+        description: PySpark cleaned historical weather data 2023
