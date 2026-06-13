@@ -1,0 +1,53 @@
+
+version: 2
+
+models:
+  - name: stg_energy_unified
+    description: >
+      Central energy staging model.
+      PySpark cleaned in Bronze then written to Snowflake Silver.
+      dbt adds incremental merge and deduplication via surrogate key.
+    config:
+      column_types:
+        reading_id: varchar
+        energy_source: varchar
+        value_mw: float
+        is_renewable: boolean
+    columns:
+      - name: '"reading_id"'
+        description: MD5 surrogate key from timestamp_ms + region + energy_source
+        tests:
+          - unique
+          - not_null
+      - name: '"value_mw"'
+        description: Generation in MW cleaned by PySpark
+        tests:
+          - not_null
+      - name: '"energy_source"'
+        description: Energy source name
+        tests:
+          - not_null
+      - name: '"is_renewable"'
+        description: True for wind solar biomass hydro pumped_storage
+        tests:
+          - not_null
+      - name: '"data_source"'
+        description: stream or historical
+        tests:
+          - accepted_values:
+              values: [stream, historical]
+
+  - name: stg_weather_unified
+    description: >
+      Weather staging model for 5 German control zones.
+      PySpark cleaned in Bronze then written to Snowflake Silver.
+    columns:
+      - name: '"weather_id"'
+        description: MD5 surrogate key from reading_ts_15min + region
+        tests:
+          - unique
+          - not_null
+      - name: '"temperature_c"'
+        description: Temperature in Celsius
+        tests:
+          - not_null

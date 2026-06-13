@@ -1,0 +1,18 @@
+
+version: 2
+
+sources:
+  - name: silver_raw
+    database: SMARD_DEV
+    schema: SILVER
+    description: PySpark cleaned tables written to Snowflake Silver
+    quoting:
+      identifier: false
+      column: true
+
+    tables:
+      - name: stg_energy_stream_clean
+        description: PySpark cleaned real-time energy stream data
+
+      - name: stg_weather_stream_clean
+        description: PySpark cleaned real-time weather data
