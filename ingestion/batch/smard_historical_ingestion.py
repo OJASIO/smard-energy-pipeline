@@ -1,11 +1,4 @@
 
-"""
-smard_historical_ingestion.py
-Downloads SMARD historical data 2017-2024
-Writes RAW to BigQuery Bronze
-Run once for backfill
-"""
-
 import os
 import sys
 import json
@@ -13,7 +6,7 @@ import time
 import requests
 import pandas as pd
 from datetime import datetime, timezone
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
     "/home/jovyan/smard-energy-pipeline/config/service_account.json"
@@ -22,6 +15,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
 PROJECT_ID  = "data-management-2-498012"
 BQ_DATASET  = "bronze"
 BQ_TABLE    = "raw_energy_historical"
+GCS_BUCKET  = "data-management-2-smard-raw"
 SMARD_BASE  = "https://www.smard.de/app/chart_data"
 REGION      = "DE"
 RESOLUTION  = "quarterhour"
@@ -45,66 +39,75 @@ SMARD_FILTERS = {
 }
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("[" + ts + "] " + msg)
 
 def get_timestamps(filter_id):
-    url = (f"{SMARD_BASE}/{filter_id}/{REGION}"
-           f"/index_{RESOLUTION}.json")
+    url = (SMARD_BASE + "/" + str(filter_id) + "/" + REGION
+           + "/index_" + RESOLUTION + ".json")
     try:
         r = requests.get(url, timeout=15, headers=HEADERS)
         if r.status_code == 200:
             return r.json().get("timestamps", [])
     except Exception as e:
-        log(f"Error getting timestamps for {filter_id}: {e}")
+        log("Error getting timestamps: " + str(e))
     return []
 
 def get_series(filter_id, timestamp_ms):
-    url = (f"{SMARD_BASE}/{filter_id}/{REGION}"
-           f"/{filter_id}_{REGION}_{RESOLUTION}_{timestamp_ms}.json")
+    url = (SMARD_BASE + "/" + str(filter_id) + "/" + REGION
+           + "/" + str(filter_id) + "_" + REGION
+           + "_" + RESOLUTION + "_" + str(timestamp_ms) + ".json")
     try:
         r = requests.get(url, timeout=15, headers=HEADERS)
         if r.status_code == 200:
             return r.json().get("series", [])
     except Exception as e:
-        log(f"Error getting series: {e}")
+        log("Error getting series: " + str(e))
     return []
 
-def write_to_bigquery(records):
-    if not records:
-        return 0
+def upload_to_gcs(pdf, gcs_path):
+    gcs_client = storage.Client(project=PROJECT_ID)
+    bucket     = gcs_client.bucket(GCS_BUCKET)
+    blob       = bucket.blob(gcs_path)
+    csv_data   = pdf.to_csv(index=False)
+    blob.upload_from_string(csv_data, content_type="text/csv")
+    log("Uploaded to gs://" + GCS_BUCKET + "/" + gcs_path)
+    return "gs://" + GCS_BUCKET + "/" + gcs_path
+
+def load_gcs_to_bigquery(gcs_uri, table_name):
     bq_client  = bigquery.Client(project=PROJECT_ID)
-    table_id   = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
+    table_id   = PROJECT_ID + "." + BQ_DATASET + "." + table_name
     job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_APPEND",
-        autodetect=True,
+        source_format     = bigquery.SourceFormat.CSV,
+        skip_leading_rows = 1,
+        autodetect        = True,
+        write_disposition = "WRITE_APPEND",
     )
-    pdf = pd.DataFrame(records)
-    job = bq_client.load_table_from_dataframe(
-        pdf, table_id, job_config=job_config)
-    job.result()
-    return len(pdf)
+    load_job = bq_client.load_table_from_uri(
+        gcs_uri, table_id, job_config=job_config)
+    load_job.result()
+    log("Loaded " + gcs_uri + " -> " + table_id)
 
 def download_source(source_name, filter_id,
-                    start_year=2017, end_year=2024):
-    log(f"Downloading {source_name} ({filter_id})...")
+                    start_year=2023, end_year=2023):
+    log("Downloading " + source_name + "...")
 
-    # Get all available timestamps
     all_timestamps = get_timestamps(filter_id)
     if not all_timestamps:
-        log(f"  No timestamps for {source_name}")
+        log("  No timestamps for " + source_name)
         return 0
 
-    # Filter to requested year range
     start_ms = int(datetime(start_year, 1, 1).timestamp() * 1000)
     end_ms   = int(datetime(end_year, 12, 31).timestamp() * 1000)
-
     filtered = [ts for ts in all_timestamps
                 if start_ms <= ts <= end_ms]
-    log(f"  Timestamps in range: {len(filtered)}")
 
+    log("  Timestamps in range: " + str(len(filtered)))
+
+    now         = datetime.now(tz=timezone.utc).isoformat()
     total_rows  = 0
     batch       = []
-    now         = datetime.now(tz=timezone.utc).isoformat()
+    batch_num   = 0
 
     for i, ts_ms in enumerate(filtered):
         series = get_series(filter_id, ts_ms)
@@ -112,60 +115,75 @@ def download_source(source_name, filter_id,
         for reading_ts_ms, value in series:
             if value is None:
                 continue
-
             reading_dt = datetime.fromtimestamp(
                 reading_ts_ms / 1000, tz=timezone.utc)
-
-            # Only include requested year range
             if not (start_year <= reading_dt.year <= end_year):
                 continue
 
             batch.append({
-                "timestamp_ms":  reading_ts_ms,
-                "reading_ts":    reading_dt.isoformat(),
-                "filter_id":     filter_id,
-                "energy_source": source_name,
-                "region":        REGION,
-                "region_name":   "Germany",
-                "value_mw":      float(value),
-                "data_source":   "historical",
+                "timestamp_ms":     reading_ts_ms,
+                "reading_ts":       reading_dt.isoformat(),
+                "filter_id":        filter_id,
+                "energy_source":    source_name,
+                "region":           REGION,
+                "region_name":      "Germany",
+                "value_mw":         float(value),
+                "data_source":      "historical",
                 "_raw_ingested_at": now,
-                "ingestion_date": now[:10],
+                "ingestion_date":   now[:10],
             })
 
-        # Write in batches of 5000
         if len(batch) >= 5000:
-            written = write_to_bigquery(batch)
-            total_rows += written
-            log(f"  Written batch: {written} rows "
-                f"(total: {total_rows})")
+            batch_num += 1
+            pdf = pd.DataFrame(batch)
+
+            # Step 1: Save to GCS
+            gcs_path = (
+                "smard/historical/energy/"
+                + str(start_year) + "/"
+                + source_name + "_batch"
+                + str(batch_num) + ".csv"
+            )
+            gcs_uri = upload_to_gcs(pdf, gcs_path)
+
+            # Step 2: Load GCS → BigQuery
+            load_gcs_to_bigquery(gcs_uri, BQ_TABLE)
+
+            total_rows += len(batch)
+            log("  Batch " + str(batch_num)
+                + ": " + str(len(batch)) + " rows via GCS")
             batch = []
 
-        # Small delay every 10 chunks
         if i % 10 == 0:
             time.sleep(0.5)
 
-    # Write remaining
+    # Write remaining batch
     if batch:
-        written = write_to_bigquery(batch)
-        total_rows += written
-        log(f"  Written final batch: {written} rows")
+        batch_num += 1
+        pdf     = pd.DataFrame(batch)
+        gcs_path = (
+            "smard/historical/energy/"
+            + str(start_year) + "/"
+            + source_name + "_batch"
+            + str(batch_num) + ".csv"
+        )
+        gcs_uri = upload_to_gcs(pdf, gcs_path)
+        load_gcs_to_bigquery(gcs_uri, BQ_TABLE)
+        total_rows += len(batch)
 
-    log(f"  Done {source_name}: {total_rows} total rows")
+    log("Done " + source_name + ": " + str(total_rows) + " rows")
     return total_rows
 
 def main():
-    # For testing use 2023 only
-    # For full backfill use 2017 to 2024
-    test_mode = "--test" in sys.argv
+    test_mode  = "--test" in sys.argv
     start_year = 2023 if test_mode else 2017
     end_year   = 2023 if test_mode else 2024
 
     log("=" * 55)
-    log("SMARD Historical Ingestion")
-    log(f"Years: {start_year} to {end_year}")
-    log(f"Sources: {len(SMARD_FILTERS)}")
-    log(f"Mode: {'TEST 2023 only' if test_mode else 'FULL 2017-2024'}")
+    log("SMARD Historical Ingestion via GCS")
+    log("Flow: SMARD API -> GCS CSV -> BigQuery Bronze")
+    log("Years: " + str(start_year) + " to " + str(end_year))
+    log("Sources: " + str(len(SMARD_FILTERS)))
     log("=" * 55)
 
     grand_total = 0
@@ -176,9 +194,10 @@ def main():
                 start_year, end_year)
             grand_total += rows
         except Exception as e:
-            log(f"Error on {source_name}: {e}")
+            log("Error on " + source_name + ": " + str(e))
 
-    log(f"Grand total rows: {grand_total}")
+    log("Grand total: " + str(grand_total) + " rows")
+    log("All CSVs saved to gs://" + GCS_BUCKET + "/smard/historical/")
     log("Historical ingestion complete!")
 
 if __name__ == "__main__":

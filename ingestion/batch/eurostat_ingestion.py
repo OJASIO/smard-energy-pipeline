@@ -1,15 +1,9 @@
 
-"""
-eurostat_ingestion.py
-Downloads Eurostat energy price index for Germany
-Writes to BigQuery Bronze raw_eurostat_energy
-"""
-
 import os
 import requests
 import pandas as pd
 from datetime import datetime, timezone
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
     "/home/jovyan/smard-energy-pipeline/config/service_account.json"
@@ -18,23 +12,25 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
 PROJECT_ID = "data-management-2-498012"
 BQ_DATASET = "bronze"
 BQ_TABLE   = "raw_eurostat_energy"
+GCS_BUCKET = "data-management-2-smard-raw"
 API_BASE   = (
     "https://ec.europa.eu/eurostat/api/dissemination"
     "/statistics/1.0/data"
 )
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("[" + ts + "] " + msg)
 
 def fetch_eurostat(dataset, params):
-    url = f"{API_BASE}/{dataset}"
+    url = API_BASE + "/" + dataset
     try:
         r = requests.get(url, params=params, timeout=30)
         if r.status_code == 200:
             return r.json()
-        log(f"Eurostat error {r.status_code}")
+        log("Eurostat error " + str(r.status_code))
     except Exception as e:
-        log(f"Eurostat fetch error: {e}")
+        log("Eurostat fetch error: " + str(e))
     return None
 
 def parse_eurostat(data, indicator_name):
@@ -50,7 +46,7 @@ def parse_eurostat(data, indicator_name):
         now       = datetime.now(tz=timezone.utc).isoformat()
 
         for idx_str, value in values.items():
-            idx  = int(idx_str)
+            idx    = int(idx_str)
             period = time_vals.get(idx, "")
             records.append({
                 "reference_period":  period,
@@ -64,32 +60,43 @@ def parse_eurostat(data, indicator_name):
             })
         return records
     except Exception as e:
-        log(f"Parse error: {e}")
+        log("Parse error: " + str(e))
         return []
 
-def write_to_bigquery(records):
-    if not records:
-        return 0
-    bq_client  = bigquery.Client(project=PROJECT_ID)
-    table_id   = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
-    job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_APPEND",
-        autodetect=True,
+def upload_to_gcs(pdf, gcs_path):
+    gcs_client = storage.Client(project=PROJECT_ID)
+    bucket     = gcs_client.bucket(GCS_BUCKET)
+    blob       = bucket.blob(gcs_path)
+    blob.upload_from_string(
+        pdf.to_csv(index=False),
+        content_type="text/csv"
     )
-    pdf = pd.DataFrame(records)
-    job = bq_client.load_table_from_dataframe(
-        pdf, table_id, job_config=job_config)
-    job.result()
-    return len(pdf)
+    gcs_uri = "gs://" + GCS_BUCKET + "/" + gcs_path
+    log("Uploaded to " + gcs_uri)
+    return gcs_uri
+
+def load_gcs_to_bigquery(gcs_uri):
+    bq_client  = bigquery.Client(project=PROJECT_ID)
+    table_id   = PROJECT_ID + "." + BQ_DATASET + "." + BQ_TABLE
+    job_config = bigquery.LoadJobConfig(
+        source_format     = bigquery.SourceFormat.CSV,
+        skip_leading_rows = 1,
+        autodetect        = True,
+        write_disposition = "WRITE_APPEND",
+    )
+    load_job = bq_client.load_table_from_uri(
+        gcs_uri, table_id, job_config=job_config)
+    load_job.result()
+    log("Loaded " + gcs_uri + " -> " + table_id)
 
 def main():
     log("=" * 55)
-    log("Eurostat Energy Price Index Ingestion")
+    log("Eurostat Energy Price Index via GCS")
+    log("Flow: Eurostat API -> GCS CSV -> BigQuery Bronze")
     log("=" * 55)
 
     all_records = []
 
-    # Energy HICP for Germany
     log("Fetching energy price index...")
     params = {
         "geo":             "DE",
@@ -100,10 +107,15 @@ def main():
     data    = fetch_eurostat("prc_hicp_midx", params)
     records = parse_eurostat(data, "HICP_ENERGY_DE")
     all_records.extend(records)
-    log(f"  Energy HICP: {len(records)} records")
+    log("Energy HICP: " + str(len(records)) + " records")
 
-    total = write_to_bigquery(all_records)
-    log(f"Eurostat ingestion complete: {total} rows")
+    if all_records:
+        pdf      = pd.DataFrame(all_records)
+        now_str  = datetime.now().strftime("%Y%m%d_%H%M%S")
+        gcs_path = "eurostat/eurostat_energy_" + now_str + ".csv"
+        gcs_uri  = upload_to_gcs(pdf, gcs_path)
+        load_gcs_to_bigquery(gcs_uri)
+        log("Eurostat complete: " + str(len(all_records)) + " rows")
 
 if __name__ == "__main__":
     main()

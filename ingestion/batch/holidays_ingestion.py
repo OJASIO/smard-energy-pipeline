@@ -1,15 +1,9 @@
 
-"""
-holidays_ingestion.py
-Downloads German public holidays from nager.date API
-Writes to BigQuery Bronze raw_german_holidays
-"""
-
 import os
 import requests
 import pandas as pd
 from datetime import datetime, timezone
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
     "/home/jovyan/smard-energy-pipeline/config/service_account.json"
@@ -18,39 +12,53 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
 PROJECT_ID = "data-management-2-498012"
 BQ_DATASET = "bronze"
 BQ_TABLE   = "raw_german_holidays"
+GCS_BUCKET = "data-management-2-smard-raw"
 API_BASE   = "https://date.nager.at/api/v3/PublicHolidays"
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("[" + ts + "] " + msg)
 
 def fetch_holidays(year):
-    url = f"{API_BASE}/{year}/DE"
+    url = API_BASE + "/" + str(year) + "/DE"
     try:
         r = requests.get(url, timeout=15)
         if r.status_code == 200:
             return r.json()
     except Exception as e:
-        log(f"Error fetching holidays {year}: {e}")
+        log("Error fetching holidays " + str(year) + ": " + str(e))
     return []
 
-def write_to_bigquery(records):
-    if not records:
-        return 0
-    bq_client  = bigquery.Client(project=PROJECT_ID)
-    table_id   = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
-    job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_APPEND",
-        autodetect=True,
+def upload_to_gcs(pdf, gcs_path):
+    gcs_client = storage.Client(project=PROJECT_ID)
+    bucket     = gcs_client.bucket(GCS_BUCKET)
+    blob       = bucket.blob(gcs_path)
+    blob.upload_from_string(
+        pdf.to_csv(index=False),
+        content_type="text/csv"
     )
-    pdf = pd.DataFrame(records)
-    job = bq_client.load_table_from_dataframe(
-        pdf, table_id, job_config=job_config)
-    job.result()
-    return len(pdf)
+    gcs_uri = "gs://" + GCS_BUCKET + "/" + gcs_path
+    log("Uploaded to " + gcs_uri)
+    return gcs_uri
+
+def load_gcs_to_bigquery(gcs_uri):
+    bq_client  = bigquery.Client(project=PROJECT_ID)
+    table_id   = PROJECT_ID + "." + BQ_DATASET + "." + BQ_TABLE
+    job_config = bigquery.LoadJobConfig(
+        source_format     = bigquery.SourceFormat.CSV,
+        skip_leading_rows = 1,
+        autodetect        = True,
+        write_disposition = "WRITE_APPEND",
+    )
+    load_job = bq_client.load_table_from_uri(
+        gcs_uri, table_id, job_config=job_config)
+    load_job.result()
+    log("Loaded " + gcs_uri + " -> " + table_id)
 
 def main():
     log("=" * 55)
-    log("German Holidays Ingestion 2017-2025")
+    log("German Holidays Ingestion via GCS")
+    log("Flow: nager.date API -> GCS CSV -> BigQuery Bronze")
     log("=" * 55)
 
     all_records = []
@@ -70,10 +78,15 @@ def main():
                 "_raw_ingested_at": now,
                 "ingestion_date":   now[:10],
             })
-        log(f"  {year}: {len(holidays)} holidays")
+        log(str(year) + ": " + str(len(holidays)) + " holidays")
 
-    total = write_to_bigquery(all_records)
-    log(f"Holidays ingestion complete: {total} rows")
+    if all_records:
+        pdf      = pd.DataFrame(all_records)
+        now_str  = datetime.now().strftime("%Y%m%d_%H%M%S")
+        gcs_path = "holidays/german_holidays_" + now_str + ".csv"
+        gcs_uri  = upload_to_gcs(pdf, gcs_path)
+        load_gcs_to_bigquery(gcs_uri)
+        log("Holidays complete: " + str(len(all_records)) + " rows")
 
 if __name__ == "__main__":
     main()

@@ -1,15 +1,9 @@
 
-"""
-ecb_ingestion.py
-Downloads ECB exchange rates and interest rates
-Writes to BigQuery Bronze raw_ecb_rates
-"""
-
 import os
 import requests
 import pandas as pd
 from datetime import datetime, timezone
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
     "/home/jovyan/smard-energy-pipeline/config/service_account.json"
@@ -18,24 +12,25 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
 PROJECT_ID = "data-management-2-498012"
 BQ_DATASET = "bronze"
 BQ_TABLE   = "raw_ecb_rates"
+GCS_BUCKET = "data-management-2-smard-raw"
 ECB_BASE   = "https://data-api.ecb.europa.eu/service/data"
 
 def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("[" + ts + "] " + msg)
 
 def fetch_ecb_series(series_key, rate_type, start="2017-01-01"):
-    url = (f"{ECB_BASE}/{series_key}"
-           f"?format=jsondata&startPeriod={start}")
+    url = ECB_BASE + "/" + series_key + "?format=jsondata&startPeriod=" + start
     try:
         r = requests.get(url, timeout=30,
                         headers={"Accept": "application/json"})
         if r.status_code != 200:
-            log(f"ECB API error {r.status_code} for {series_key}")
+            log("ECB API error " + str(r.status_code)
+                + " for " + series_key)
             return []
 
         data       = r.json()
-        series     = data.get("dataSets", [{}])[0].get(
-                         "series", {})
+        series     = data.get("dataSets", [{}])[0].get("series", {})
         dates      = data.get("structure", {}).get(
                          "dimensions", {}).get(
                          "observation", [{}])[0].get("values", [])
@@ -57,49 +52,56 @@ def fetch_ecb_series(series_key, rate_type, start="2017-01-01"):
                     })
         return records
     except Exception as e:
-        log(f"Error fetching ECB {series_key}: {e}")
+        log("Error fetching ECB " + series_key + ": " + str(e))
         return []
 
-def write_to_bigquery(records):
-    if not records:
-        return 0
-    bq_client  = bigquery.Client(project=PROJECT_ID)
-    table_id   = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
-    job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_APPEND",
-        autodetect=True,
+def upload_to_gcs(pdf, gcs_path):
+    gcs_client = storage.Client(project=PROJECT_ID)
+    bucket     = gcs_client.bucket(GCS_BUCKET)
+    blob       = bucket.blob(gcs_path)
+    blob.upload_from_string(
+        pdf.to_csv(index=False),
+        content_type="text/csv"
     )
-    pdf = pd.DataFrame(records)
-    job = bq_client.load_table_from_dataframe(
-        pdf, table_id, job_config=job_config)
-    job.result()
-    log(f"Written {len(pdf)} rows to {BQ_TABLE}")
-    return len(pdf)
+    gcs_uri = "gs://" + GCS_BUCKET + "/" + gcs_path
+    log("Uploaded to " + gcs_uri)
+    return gcs_uri
+
+def load_gcs_to_bigquery(gcs_uri):
+    bq_client  = bigquery.Client(project=PROJECT_ID)
+    table_id   = PROJECT_ID + "." + BQ_DATASET + "." + BQ_TABLE
+    job_config = bigquery.LoadJobConfig(
+        source_format     = bigquery.SourceFormat.CSV,
+        skip_leading_rows = 1,
+        autodetect        = True,
+        write_disposition = "WRITE_APPEND",
+    )
+    load_job = bq_client.load_table_from_uri(
+        gcs_uri, table_id, job_config=job_config)
+    load_job.result()
+    log("Loaded " + gcs_uri + " -> " + table_id)
 
 def main():
     log("=" * 55)
-    log("ECB Rates Ingestion")
+    log("ECB Rates Ingestion via GCS")
+    log("Flow: ECB API -> GCS CSV -> BigQuery Bronze")
     log("=" * 55)
 
     all_records = []
 
-    # EUR/USD exchange rate
     log("Fetching EUR/USD exchange rate...")
     records = fetch_ecb_series(
         "EXR/D.USD.EUR.SP00.A", "EUR_USD_RATE")
     all_records.extend(records)
-    log(f"  EUR/USD: {len(records)} records")
+    log("EUR/USD: " + str(len(records)) + " records")
 
-    # ECB deposit facility rate
-    log("Fetching ECB deposit rate...")
-    records = fetch_ecb_series(
-        "FM/B.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",
-        "EURIBOR_3M")
-    all_records.extend(records)
-    log(f"  EURIBOR 3M: {len(records)} records")
-
-    total = write_to_bigquery(all_records)
-    log(f"ECB ingestion complete: {total} rows")
+    if all_records:
+        pdf      = pd.DataFrame(all_records)
+        now      = datetime.now().strftime("%Y%m%d_%H%M%S")
+        gcs_path = "ecb/ecb_rates_" + now + ".csv"
+        gcs_uri  = upload_to_gcs(pdf, gcs_path)
+        load_gcs_to_bigquery(gcs_uri)
+        log("ECB ingestion complete: " + str(len(all_records)) + " rows")
 
 if __name__ == "__main__":
     main()
