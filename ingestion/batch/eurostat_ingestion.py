@@ -13,6 +13,7 @@ GCS_BUCKET = "data-management-2-smard-raw"
 API_BASE   = (
     "https://ec.europa.eu/eurostat/api/dissemination"
     "/statistics/1.0/data"
+)
 
 def log(msg):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -1,19 +1,11 @@
-
 {{
     config(
         materialized         = "incremental",
-        unique_key           = "flow_id",
+        unique_key           = '"flow_id"',
         incremental_strategy = "merge",
         on_schema_change     = "append_new_columns"
     )
 }}
-
-/*
-fct_cross_border_flows
-Gold layer - Cross-border electricity flow fact table
-Source: SMARD API cross-border flow filters
-Grain: one row per hour per flow type
-*/
 
 select
     "flow_id",
