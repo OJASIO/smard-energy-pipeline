@@ -1,0 +1,68 @@
+{
+  "expectations": [
+    {
+      "id": "3dd80401-3cc4-430d-8e97-9bcebd886416",
+      "kwargs": {
+        "column": "observation_time"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "9b54dda2-d9c0-408a-a3f7-7a41cc503ead",
+      "kwargs": {
+        "column": "region"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "616916b0-8751-4583-8763-d4c9a73b201e",
+      "kwargs": {
+        "column": "region",
+        "value_set": [
+          "DE",
+          "Amprion",
+          "TenneT",
+          "TransnetBW",
+          "50Hertz"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "28beb2f4-75c5-40d8-a830-dcaabf5e902e",
+      "kwargs": {
+        "column": "temperature_c",
+        "max_value": 60.0,
+        "min_value": -50.0,
+        "mostly": 0.99
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    },
+    {
+      "id": "5fbaf6c9-b31c-4202-b0b6-57a8019520d9",
+      "kwargs": {
+        "column": "wind_speed_ms",
+        "max_value": 100.0,
+        "min_value": 0.0,
+        "mostly": 0.99
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    }
+  ],
+  "id": "19e3a38e-0ef2-4856-aee6-6ad51575f9e2",
+  "meta": {
+    "great_expectations_version": "1.18.1"
+  },
+  "name": "bronze_weather_suite",
+  "notes": null
+}

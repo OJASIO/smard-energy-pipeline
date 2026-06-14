@@ -1,0 +1,86 @@
+{
+  "expectations": [
+    {
+      "id": "80eec8b6-bd8d-404d-acf7-e0a91f12ae7a",
+      "kwargs": {
+        "column": "timestamp_ms"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "21e36e37-f0ac-49a4-8a32-f33c68d210a2",
+      "kwargs": {
+        "column": "energy_source"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "72e128f1-4a55-4fe4-8236-3053ea08f249",
+      "kwargs": {
+        "column": "region"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "9d2dcfbe-d410-453d-9923-671501c0be8f",
+      "kwargs": {
+        "column": "region",
+        "value_set": [
+          "DE"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "1baa5238-e5b4-4800-ada2-84af8080d747",
+      "kwargs": {
+        "column": "energy_source",
+        "value_set": [
+          "wind_onshore",
+          "wind_offshore",
+          "solar",
+          "biomass",
+          "hydro",
+          "pumped_storage",
+          "other_renewables",
+          "other_conventional",
+          "lignite",
+          "nuclear",
+          "hard_coal",
+          "natural_gas",
+          "consumption",
+          "price_de_lu"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "52bf51f0-9b2d-4dda-b11b-edf4baa2d578",
+      "kwargs": {
+        "column": "value_mw",
+        "max_value": 500000.0,
+        "min_value": -100000.0,
+        "mostly": 0.99
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    }
+  ],
+  "id": "59315601-57f7-4f4c-9553-09e731ac0676",
+  "meta": {
+    "great_expectations_version": "1.18.1"
+  },
+  "name": "bronze_energy_suite",
+  "notes": null
+}
