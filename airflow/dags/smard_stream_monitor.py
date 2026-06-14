@@ -4,10 +4,8 @@ from datetime import datetime, timedelta
 
 BASE = "/home/usr_100004636_srh_heidelberg_org/smard-energy-pipeline"
 VENV = "/home/usr_100004636_srh_heidelberg_org/airflow_venv/bin/python3"
-DBT  = "/home/usr_100004636_srh_heidelberg_org/airflow_venv/bin/dbt"
 JAVA = "export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64 && export PATH=$JAVA_HOME/bin:$PATH"
 ENV  = JAVA + " && export SPARK_LOCAL_IP=127.0.0.1 && export GOOGLE_CLOUD_PROJECT=data-management-2-498012 && export PIPELINE_ENV=prod"
-DBT_FLAGS = "--project-dir " + BASE + "/dbt/smard_pipeline --profiles-dir ~/.dbt --target prod"
 
 default_args = {
     "owner": "smard_pipeline",
@@ -46,9 +44,4 @@ with DAG(
         bash_command=ENV + " && " + VENV + " " + BASE + "/spark/streaming/spark_silver_processor.py --once",
     )
 
-    dbt_refresh = BashOperator(
-        task_id="dbt_refresh_silver_gold",
-        bash_command=ENV + " && " + DBT + " run " + DBT_FLAGS + " --select silver gold",
-    )
-
-    poll_energy >> poll_weather >> spark_bronze >> spark_silver >> dbt_refresh
+    poll_energy >> poll_weather >> spark_bronze >> spark_silver
