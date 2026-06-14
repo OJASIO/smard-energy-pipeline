@@ -1,0 +1,76 @@
+name: dbt CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dbt/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dbt/**'
+
+jobs:
+  dbt-test:
+    name: Run dbt Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dbt
+        run: |
+          pip install dbt-snowflake==1.11.5
+
+      - name: Create dbt profiles
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'PROFILE'
+          smard_pipeline:
+            target: dev
+            outputs:
+              dev:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: TRANSFORMER
+                database: SMARD_DEV
+                warehouse: COMPUTE_WH
+                schema: SILVER
+                threads: 4
+                client_session_keep_alive: False
+          PROFILE
+
+      - name: dbt debug
+        run: |
+          dbt debug \
+            --project-dir dbt/smard_pipeline \
+            --profiles-dir ~/.dbt
+
+      - name: dbt run
+        run: |
+          dbt run \
+            --project-dir dbt/smard_pipeline \
+            --profiles-dir ~/.dbt \
+            --target dev
+
+      - name: dbt test
+        run: |
+          dbt test \
+            --project-dir dbt/smard_pipeline \
+            --profiles-dir ~/.dbt \
+            --target dev
+
+      - name: dbt docs generate
+        run: |
+          dbt docs generate \
+            --project-dir dbt/smard_pipeline \
+            --profiles-dir ~/.dbt \
+            --target dev
