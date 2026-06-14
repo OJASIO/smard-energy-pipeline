@@ -14,9 +14,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from google.cloud import pubsub_v1, bigquery
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/jovyan/smard-energy-pipeline/config/service_account.json"
-os.environ["JAVA_HOME"]            = "/opt/conda/lib/jvm"
-os.environ["PATH"] = "/opt/conda/lib/jvm/bin:" + os.environ.get("PATH", "")
+os.environ["JAVA_HOME"]            = "/usr/lib/jvm/java-11-openjdk-amd64"
+os.environ["PATH"] = "/usr/lib/jvm/java-11-openjdk-amd64/bin:" + os.environ.get("PATH", "")
 os.environ["SPARK_LOCAL_IP"]       = "127.0.0.1"
 os.environ["GOOGLE_CLOUD_PROJECT"] = "data-management-2-498012"
 
@@ -26,7 +25,7 @@ WEATHER_SUB  = "weather-live-sub"
 BQ_DATASET   = "bronze"
 POLL_SECONDS = 60
 
-JAR_DIR  = "/home/jovyan/smard-energy-pipeline/spark/jars"
+JAR_DIR  = "/home/usr_100004636_srh_heidelberg_org/smard-energy-pipeline/spark/jars"
 BQ_JAR   = f"{JAR_DIR}/spark-bigquery-with-dependencies_2.12-0.34.0.jar"
 GCS_JAR  = f"{JAR_DIR}/gcs-connector-hadoop3-latest.jar"
 ALL_JARS = f"{BQ_JAR},{GCS_JAR}"

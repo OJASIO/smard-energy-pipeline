@@ -7,9 +7,6 @@ import pandas as pd
 from datetime import datetime, timezone
 from google.cloud import bigquery, storage
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
-    "/home/jovyan/smard-energy-pipeline/config/service_account.json"
-)
 
 PROJECT_ID = "data-management-2-498012"
 BQ_DATASET = "bronze"

@@ -3,9 +3,6 @@ import os, json, time, requests, sys
 from datetime import datetime, timezone
 from google.cloud import pubsub_v1
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
-    "/home/jovyan/smard-energy-pipeline/config/service_account.json"
-)
 
 PROJECT_ID    = "data-management-2-498012"
 TOPIC_ID      = "smard-energy-live"
