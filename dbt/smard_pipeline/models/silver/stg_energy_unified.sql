@@ -1,20 +1,17 @@
-
 {{
     config(
         materialized = "incremental",
-        unique_key   = "\"reading_id\"",
+        unique_key   = '"reading_id"',
         incremental_strategy = "merge",
         on_schema_change = "append_new_columns"
     )
 }}
-
 /*
 stg_energy_unified
 Silver layer - dbt transformation only
 PySpark already cleaned both stream and historical data
-dbt does: UNION ALL stream + historical + incremental merge
+dbt does: UNION ALL stream + historical + dedup + incremental merge
 */
-
 with stream as (
     select
         "reading_id",
@@ -49,7 +46,6 @@ with stream as (
     )
     {% endif %}
 ),
-
 historical as (
     select
         "reading_id",
@@ -83,8 +79,18 @@ historical as (
         where "data_source" = 'historical'
     )
     {% endif %}
+),
+combined as (
+    select * from stream
+    union all
+    select * from historical
+),
+deduped as (
+    select *
+    from combined
+    qualify row_number() over (
+        partition by "reading_id"
+        order by "_silver_processed_at" desc
+    ) = 1
 )
-
-select * from stream
-union all
-select * from historical
+select * from deduped
