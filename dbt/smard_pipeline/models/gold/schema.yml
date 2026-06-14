@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Date dimension table with 2925 days from 2017-2024. Includes weekday, month, quarter, year, is_weekend, is_holiday flags."
+
+  - name: dim_energy_sources
+    description: "Energy source dimension with 14 German energy types. Categorizes renewable vs fossil, provides display names and categories."
+
+  - name: dim_regions
+    description: "German TSO control zone dimension. 5 regions: DE, Amprion, TenneT, TransnetBW, 50Hertz."
+
+  - name: fct_energy_readings
+    description: >
+      Central fact table with 3.8M energy readings from 2017-2024.
+      Grain: one row per 15-minute interval per energy source per region.
+      Joined with weather data for correlation analysis.
+      Source: stg_energy_unified + stg_weather_unified.
+
+  - name: fct_cross_border_flows
+    description: >
+      Cross-border electricity flow fact table with 465K records.
+      Covers commercial and physical flows across German borders.
+      Source: SMARD cross-border API filters.
+
+  - name: agg_daily_generation
+    description: "Daily aggregation of energy generation by source and region. 34K rows covering 2017-2024."
+
+  - name: agg_hourly_patterns
+    description: "Hourly patterns of energy generation averaged across all years. 288 rows (24 hours x 12 energy sources)."
+
+  - name: agg_renewable_share
+    description: "Daily renewable energy share as percentage of total generation. Used for green energy trend analysis."
+
+  - name: agg_weather_correlation
+    description: "Weather-energy correlation metrics by day. Shows relationship between wind/solar/temperature and generation."
+
+  - name: agg_price_analysis
+    description: "Daily electricity price analysis for DE-LU bidding zone. Includes min, max, avg prices."
+
+  - name: agg_regional_comparison
+    description: "Regional comparison of energy generation across 5 German TSO zones."
+
+  - name: agg_cross_border_daily
+    description: "Daily aggregation of cross-border electricity flows. Shows Germany net import/export position."

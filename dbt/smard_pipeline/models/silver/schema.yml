@@ -1,44 +1,63 @@
 version: 2
 
+sources:
+  - name: silver_raw
+    database: SMARD_DEV
+    schema: SILVER
+    description: "PySpark cleaned Silver layer tables from BigQuery Bronze"
+    tables:
+      - name: stg_energy_stream_clean
+        description: "Real-time energy stream data cleaned by PySpark"
+      - name: stg_energy_historical_clean
+        description: "Historical energy data 2017-2024 cleaned by PySpark"
+      - name: stg_weather_stream_clean
+        description: "Real-time weather stream data cleaned by PySpark"
+      - name: stg_weather_historical_clean
+        description: "Historical weather data 2017-2024 cleaned by PySpark"
+      - name: stg_cross_border_clean
+        description: "Cross-border electricity flow data cleaned by PySpark"
+
 models:
   - name: stg_energy_unified
     description: >
-      Central energy staging model.
-      PySpark cleaned in Bronze then written to Snowflake Silver.
-      dbt adds incremental merge and deduplication via surrogate key.
+      Central energy staging model combining stream and historical data.
+      PySpark cleaned data from Bronze layer merged via dbt incremental merge.
+      Deduplication via QUALIFY ROW_NUMBER ensures zero duplicates.
+      Contains 8 years of German energy generation data (2017-2024) plus live stream.
     columns:
       - name: '"reading_id"'
-        description: MD5 surrogate key from timestamp_ms + region + energy_source
+        description: "MD5 surrogate key from timestamp_ms + region + energy_source"
         tests:
           - not_null
       - name: '"value_mw"'
-        description: Generation in MW cleaned by PySpark
+        description: "Energy generation or consumption in Megawatts"
         tests:
           - not_null
       - name: '"energy_source"'
-        description: Energy source name
+        description: "Energy source name (wind_onshore, solar, lignite etc)"
         tests:
           - not_null
       - name: '"is_renewable"'
-        description: True for wind solar biomass hydro pumped_storage
+        description: "True for wind, solar, biomass, hydro, pumped_storage"
         tests:
           - not_null
       - name: '"data_source"'
-        description: stream or historical
+        description: "Origin of data: stream (live) or historical (2017-2024)"
         tests:
           - accepted_values:
               values: [stream, historical]
 
   - name: stg_weather_unified
     description: >
-      Weather staging model for 5 German control zones.
-      PySpark cleaned in Bronze then written to Snowflake Silver.
+      Weather staging model for 5 German TSO control zones.
+      Combines real-time and historical weather data.
+      Used for weather-energy correlation analysis in Gold layer.
     columns:
       - name: '"weather_id"'
-        description: MD5 surrogate key from reading_ts_15min + region
+        description: "MD5 surrogate key from reading_ts_15min + region"
         tests:
           - not_null
       - name: '"temperature_c"'
-        description: Temperature in Celsius
+        description: "Temperature in Celsius"
         tests:
           - not_null
