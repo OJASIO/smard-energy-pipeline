@@ -1,22 +1,5 @@
 version: 2
 
-sources:
-  - name: silver_raw
-    database: SMARD_DEV
-    schema: SILVER
-    description: "PySpark cleaned Silver layer tables from BigQuery Bronze"
-    tables:
-      - name: stg_energy_stream_clean
-        description: "Real-time energy stream data cleaned by PySpark"
-      - name: stg_energy_historical_clean
-        description: "Historical energy data 2017-2024 cleaned by PySpark"
-      - name: stg_weather_stream_clean
-        description: "Real-time weather stream data cleaned by PySpark"
-      - name: stg_weather_historical_clean
-        description: "Historical weather data 2017-2024 cleaned by PySpark"
-      - name: stg_cross_border_clean
-        description: "Cross-border electricity flow data cleaned by PySpark"
-
 models:
   - name: stg_energy_unified
     description: >
