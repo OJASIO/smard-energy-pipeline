@@ -87,11 +87,11 @@ fluent_datasources:
     assets:
       energy_asset:
         type: dataframe
-        id: 61ab96aa-3a0f-408c-b0f2-751c36947fef
+        id: ecd2fb30-6b63-4605-93da-b529ce782478
         batch_metadata: {}
         batch_definitions:
           energy_batch:
-            id: d0f26f38-cfc9-4089-8ed4-3324969d1836
+            id: 9aea4e66-410c-410a-8169-bfeee1121ba2
             partitioner:
   weather_pandas:
     type: pandas
@@ -99,11 +99,11 @@ fluent_datasources:
     assets:
       weather_asset:
         type: dataframe
-        id: dc8aa7ed-56a1-4cb3-8510-c5d847bcdc7f
+        id: 0630eb92-f1cf-4f50-b2fa-5941dd79e0db
         batch_metadata: {}
         batch_definitions:
           weather_batch:
-            id: cd20f434-036f-413e-91b5-8329ad7e8b97
+            id: 0a58bcc4-2ad9-45e5-acc9-e3e3637d4e65
             partitioner:
   crossborder_pandas:
     type: pandas
@@ -111,11 +111,11 @@ fluent_datasources:
     assets:
       crossborder_asset:
         type: dataframe
-        id: 74305182-b7eb-4fdf-bffb-911aa3a5cc48
+        id: 7003cede-5e9d-499a-a1d7-1dc5c5fdafc4
         batch_metadata: {}
         batch_definitions:
           crossborder_batch:
-            id: a514949b-710b-480f-944f-c19788600eb4
+            id: 4fd1fcda-f4f9-4678-aa65-6fd6ff3b4c90
             partitioner:
 analytics_enabled:
 data_context_id: ba86d44d-d72b-407c-8e8f-7c5b04d410bb

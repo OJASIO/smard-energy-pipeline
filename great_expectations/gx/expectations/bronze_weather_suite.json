@@ -1,7 +1,7 @@
 {
   "expectations": [
     {
-      "id": "3dd80401-3cc4-430d-8e97-9bcebd886416",
+      "id": "75f4f707-7fd5-4a68-9540-1e08f496ae05",
       "kwargs": {
         "column": "observation_time"
       },
@@ -10,7 +10,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "9b54dda2-d9c0-408a-a3f7-7a41cc503ead",
+      "id": "390b00ae-7662-4ad0-a0b3-e5060f590761",
       "kwargs": {
         "column": "region"
       },
@@ -19,7 +19,7 @@
       "type": "expect_column_values_to_not_be_null"
     },
     {
-      "id": "616916b0-8751-4583-8763-d4c9a73b201e",
+      "id": "b0dc77b5-1c27-430e-b36a-c4763a35c42c",
       "kwargs": {
         "column": "region",
         "value_set": [
@@ -35,7 +35,7 @@
       "type": "expect_column_values_to_be_in_set"
     },
     {
-      "id": "28beb2f4-75c5-40d8-a830-dcaabf5e902e",
+      "id": "0f8ae8b8-b814-4a13-a1f4-c837dd693e02",
       "kwargs": {
         "column": "temperature_c",
         "max_value": 60.0,
@@ -47,7 +47,7 @@
       "type": "expect_column_values_to_be_between"
     },
     {
-      "id": "5fbaf6c9-b31c-4202-b0b6-57a8019520d9",
+      "id": "3a7e39bf-b876-483c-8e3c-3ed7cd5bcd50",
       "kwargs": {
         "column": "wind_speed_ms",
         "max_value": 100.0,
