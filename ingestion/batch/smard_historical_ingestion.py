@@ -175,6 +175,11 @@ def main():
     test_mode  = "--test" in sys.argv
     start_year = 2023 if test_mode else 2017
     end_year   = 2023 if test_mode else 2024
+    if "--year" in sys.argv:
+        idx = sys.argv.index("--year")
+        custom_year = int(sys.argv[idx+1])
+        start_year = custom_year
+        end_year = custom_year
 
     log("=" * 55)
     log("SMARD Historical Ingestion via GCS")

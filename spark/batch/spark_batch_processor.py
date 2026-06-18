@@ -72,11 +72,14 @@ def create_spark():
     log("Spark session created")
     return spark
 
-def read_from_bronze(table_name, chunk_size=50000, offset=0):
+def read_from_bronze(table_name, chunk_size=50000, offset=0, where_clause=""):
     bq_client = bigquery.Client(project=PROJECT_ID)
+    where_sql = f"WHERE {where_clause}" if where_clause else ""
+    order_col = "timestamp_ms" if "energy" in table_name else "reading_ts"
     query = f"""
         SELECT * FROM `{PROJECT_ID}.{BQ_DATASET}.{table_name}`
-        ORDER BY timestamp_ms
+        {where_sql}
+        ORDER BY {order_col}
         LIMIT {chunk_size} OFFSET {offset}
     """
     rows = list(bq_client.query(query).result())
@@ -346,15 +349,57 @@ def main():
     log("SMARD Batch Processor")
     log("BigQuery Bronze -> PySpark -> Snowflake Silver")
     log("=" * 55)
-
     spark      = create_spark()
     chunk_size = 50000
-
-    # Energy already processed - skip
+    year_filter = None
+    if "--year" in sys.argv:
+        idx = sys.argv.index("--year")
+        year_filter = int(sys.argv[idx+1])
+    if year_filter:
+        log("Processing ONLY year " + str(year_filter) + " (energy + weather)")
+        where_clause = "EXTRACT(YEAR FROM TIMESTAMP_MILLIS(CAST(timestamp_ms AS INT64))) = " + str(year_filter)
+        total_energy = 0
+        offset = 0
+        while True:
+            pdf_raw = read_from_bronze(
+                "raw_energy_historical", chunk_size=chunk_size,
+                offset=offset, where_clause=where_clause)
+            if pdf_raw.empty:
+                break
+            pdf_clean, clean_count, rejected = clean_energy_batch(spark, pdf_raw)
+            if not pdf_clean.empty:
+                rows = write_to_snowflake(pdf_clean, "stg_energy_historical_clean")
+                total_energy += rows
+            offset += chunk_size
+            log("Energy progress: " + str(offset) + " processed, " + str(total_energy) + " written")
+            if len(pdf_raw) < chunk_size:
+                break
+        log("Energy complete: " + str(total_energy) + " rows")
+        where_clause_weather = "EXTRACT(YEAR FROM reading_ts) = " + str(year_filter)
+        total_weather = 0
+        offset = 0
+        while True:
+            pdf_raw = read_from_bronze(
+                "raw_weather_historical", chunk_size=chunk_size,
+                offset=offset, where_clause=where_clause_weather)
+            if pdf_raw.empty:
+                break
+            pdf_clean, clean_count, rejected = clean_weather_batch(spark, pdf_raw)
+            if not pdf_clean.empty:
+                rows = write_to_snowflake(pdf_clean, "stg_weather_historical_clean")
+                total_weather += rows
+            offset += chunk_size
+            log("Weather progress: " + str(offset) + " processed, " + str(total_weather) + " written")
+            if len(pdf_raw) < chunk_size:
+                break
+        log("Weather complete: " + str(total_weather) + " rows")
+        log("Batch processing complete!")
+        log("Energy: " + str(total_energy) + " rows")
+        log("Weather: " + str(total_weather) + " rows")
+        spark.stop()
+        return
     log("Skipping energy - already processed 3.8M rows")
     total_energy = 3826136
-
-    # Process weather historical
     log("Processing historical weather data...")
     total_weather = 0
     offset        = 0
@@ -366,22 +411,17 @@ def main():
         )
         if pdf_raw.empty:
             break
-
         pdf_clean, clean_count, rejected = clean_weather_batch(
             spark, pdf_raw)
-
         if not pdf_clean.empty:
             rows = write_to_snowflake(
                 pdf_clean, "stg_weather_historical_clean")
             total_weather += rows
-
         offset += chunk_size
         log("Weather progress: " + str(offset)
             + " processed, " + str(total_weather) + " written")
-
         if len(pdf_raw) < chunk_size:
             break
-
     log("Weather complete: " + str(total_weather) + " rows")
     log("Batch processing complete!")
     log("Energy: " + str(total_energy) + " rows")

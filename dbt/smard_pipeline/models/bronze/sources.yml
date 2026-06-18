@@ -3,7 +3,7 @@ version: 2
 
 sources:
   - name: silver_raw
-    database: SMARD_DEV
+    database: "{{ 'SMARD_PROD' if target.name == 'prod' else 'SMARD_DEV' }}"
     schema: SILVER
     description: PySpark cleaned tables written to Snowflake Silver
     quoting:
