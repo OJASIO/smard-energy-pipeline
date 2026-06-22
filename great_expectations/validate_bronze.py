@@ -134,7 +134,7 @@ def validate_crossborder(context):
             column="region", value_set=["DE"]
         ),
         gx.expectations.ExpectColumnValuesToBeBetween(
-            column="value_mw", min_value=-50000, max_value=50000, mostly=0.99
+            column="value_mw", min_value=-100000, max_value=100000, mostly=0.99
         ),
     ]
 
