@@ -80,10 +80,21 @@ def load_gcs_to_bigquery(gcs_uri, table_name):
         autodetect        = True,
         write_disposition = "WRITE_APPEND",
     )
-    load_job = bq_client.load_table_from_uri(
-        gcs_uri, table_id, job_config=job_config)
-    load_job.result()
-    log("Loaded " + gcs_uri + " -> " + table_id)
+    # Deterministic job_id derived from the GCS path: a client-side retry
+    # on a transient network error re-submits the SAME job_id instead of
+    # creating a new one, which raises Conflict if the original already
+    # succeeded -- preventing the double-load bug found on 2026-06-26.
+    safe_job_id = "load_" + re.sub(r"[^a-zA-Z0-9_]", "_", gcs_uri.replace("gs://", ""))
+    try:
+        load_job = bq_client.load_table_from_uri(
+            gcs_uri, table_id, job_config=job_config, job_id=safe_job_id)
+        load_job.result()
+        log("Loaded " + gcs_uri + " -> " + table_id)
+    except Exception as e:
+        if "Already Exists" in str(e) or "duplicate" in str(e).lower():
+            log("Load job " + safe_job_id + " already completed previously - skipping (no duplicate write)")
+        else:
+            raise
 
 def download_source(source_name, filter_id,
                     start_year=2023, end_year=2023):
