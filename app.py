@@ -165,9 +165,7 @@ st.markdown(f"""
     <span style="font-size:0.7rem;color:#7B91B8">Anomalies (90d)
         <b style="color:#4DD9B3;margin-left:4px">{an_cnt}</b></span>
   </div>
-  <div style="font-size:0.65rem;color:#4A5E80;line-height:1.6">
-    Snowflake · Prophet · LLaMA 3.3<br>2017–present · Region: DE
-  </div>
+  <div style="font-size:0.65rem;color:#8BA3C7;line-height:1.6;text-align:right">Snowflake · Prophet · LLaMA 3.3<br>2017–2026 · Region: DE</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -267,11 +265,6 @@ with left:
 
 # ── RIGHT: Data panel with tabs ──
 with right:
-    st.markdown("""
-    <div style="background:#fff;border:1px solid #DDE1EC;border-radius:10px;
-        padding:1.25rem;height:100%">
-    """, unsafe_allow_html=True)
-
     tab1, tab2, tab3 = st.tabs(["Forecast", "Renewable share", "Anomalies"])
 
     with tab1:
