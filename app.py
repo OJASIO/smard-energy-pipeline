@@ -316,6 +316,7 @@ with right:
                         unsafe_allow_html=True)
             display = sh_df[["date","renewable_pct","renewable_mwh","total_mwh"]].copy()
             display.columns = ["Date","Share %","Renewable (MWh)","Total (MWh)"]
+            display["Date"] = display["Date"].astype(str).str[:10]
             display["Share %"] = display["Share %"].apply(lambda x: f"{float(x):.1f}%")
             display["Renewable (MWh)"] = display["Renewable (MWh)"].apply(lambda x: f"{float(x):,.0f}")
             display["Total (MWh)"] = display["Total (MWh)"].apply(lambda x: f"{float(x):,.0f}")
@@ -341,7 +342,7 @@ with right:
                     f"<div style='display:flex;justify-content:space-between;"
                     f"align-items:center;margin-bottom:0.2rem'>"
                     f"<span style='font-size:0.75rem;font-weight:600;color:#1A2540'>"
-                    f"{row.get('date','')}</span>"
+                    f"{str(row.get('date','')).split(' ')[0]}</span>"
                     f"<span style='font-size:0.7rem;font-weight:500;color:{color}'>"
                     f"{t}</span></div>"
                     f"<div style='font-size:0.68rem;color:#8A98B8'>"
