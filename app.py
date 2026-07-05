@@ -5,26 +5,10 @@ Uses native Streamlit components for Streamlit Cloud compatibility.
 
 import os
 import sys
-
-# Streamlit Cloud secrets bridge — must run before ANY other imports
-# so that os.environ is populated before agent modules load
-import streamlit as st
-try:
-    for key in ["SNOWFLAKE_ACCOUNT","SNOWFLAKE_USER","SNOWFLAKE_PASSWORD",
-                "SNOWFLAKE_ROLE","SNOWFLAKE_WAREHOUSE","SNOWFLAKE_DATABASE","GROQ_API_KEY"]:
-        if key in st.secrets and not os.environ.get(key):
-            os.environ[key] = st.secrets[key]
-except Exception:
-    pass
-
 import uuid
 import plotly.graph_objects as go
 import pandas as pd
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "agent"))
-
-from energy_agent import EnergyAgent, AgentResponse
-from query_templates import run_template
+import streamlit as st
 
 st.set_page_config(
     page_title="German Energy Intelligence",
@@ -32,6 +16,23 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# Secrets bridge — MUST come after set_page_config, before agent imports
+try:
+    for key in ["SNOWFLAKE_ACCOUNT","SNOWFLAKE_USER","SNOWFLAKE_PASSWORD",
+                "SNOWFLAKE_ROLE","SNOWFLAKE_WAREHOUSE","SNOWFLAKE_DATABASE","GROQ_API_KEY"]:
+        val = st.secrets.get(key, "")
+        if val and not os.environ.get(key):
+            os.environ[key] = val
+except Exception as e:
+    st.warning(f"Secrets not loaded: {e}")
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "agent"))
+
+from energy_agent import EnergyAgent, AgentResponse
+from query_templates import run_template
+
+
 
 # Minimal CSS — only what Streamlit Cloud reliably renders
 st.markdown("""
