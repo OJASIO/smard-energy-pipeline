@@ -193,9 +193,9 @@ with left:
             "What is the renewable energy forecast for the next 7 days?",
             "Were there any anomalies in the last 90 days?",
             "What was Germany's renewable share last month?",
-            "Which energy source generated the most power recently?",
-            "How does renewable generation compare to last year?",
-            "How has electricity demand changed recently?",
+            "Wie war der Anteil erneuerbarer Energien letzten Monat?",
+            "Welche Energiequelle hat zuletzt am meisten Strom erzeugt?",
+            "Wie hat sich die Stromnachfrage in letzter Zeit verändert?",
         ]
         c1, c2 = st.columns(2)
         for i, h in enumerate(hints):

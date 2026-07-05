@@ -9,6 +9,7 @@ easier to debug, and avoid version conflict issues.
 import os
 import time
 import uuid
+from langdetect import detect, LangDetectException
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -56,12 +57,26 @@ class EnergyAgent:
         self.last_question_time = 0.0
         self.client           = Groq(api_key=GROQ_API_KEY)
 
+    def _detect_language(self, text: str) -> str:
+        """Detect question language — returns 'de' for German, 'en' for everything else."""
+        try:
+            lang = detect(text)
+            return lang if lang in ("de", "en") else "en"
+        except LangDetectException:
+            return "en"
+
     def _call_llm(self, system_prompt: str, user_message: str,
-                  max_tokens: int = 1024) -> str:
+                  max_tokens: int = 1024, language: str = "en") -> str:
+        lang_instruction = (
+            "Antworte auf Deutsch. Verwende klare, professionelle Sprache."
+            if language == "de"
+            else "Respond in English. Use clear, professional language."
+        )
+        full_system = system_prompt + f"\n\nLANGUAGE INSTRUCTION: {lang_instruction}"
         response = self.client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": full_system},
                 {"role": "user",   "content": user_message},
             ],
             max_tokens=max_tokens,
@@ -146,12 +161,13 @@ class EnergyAgent:
                 template_used=template_name,
             )
 
-        # Build context and call LLM
+        # Detect language, build context, call LLM
+        language      = self._detect_language(question)
         context       = format_context(df, template_name)
         system_prompt = build_system_prompt(context)
 
         try:
-            response_text = self._call_llm(system_prompt, question)
+            response_text = self._call_llm(system_prompt, question, language=language)
         except Exception as e:
             log_event(self.session_id, question, template_name,
                       "LLM_ERROR", (time.time() - start) * 1000, str(e))

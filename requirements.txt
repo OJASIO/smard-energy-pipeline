@@ -5,3 +5,4 @@ pandas>=2.0.0
 snowflake-connector-python[pandas]>=3.6.0
 prophet>=1.1.5
 datasets>=2.18.0
+langdetect
