@@ -50,7 +50,7 @@ with DAG(
     # This ensures Gold is never more than 15 minutes behind Silver
     dbt_gold = BashOperator(
         task_id="dbt_update_gold",
-        bash_command=ENV + " && " + DBT_CMD + " run --select gold",
+        bash_command=ENV + " && cd " + BASE + "/dbt/smard_pipeline && " + DBT + " run --profiles-dir ~/.dbt --target prod --select gold",
     )
 
     poll_energy >> poll_weather >> spark_bronze >> spark_silver >> dbt_gold
