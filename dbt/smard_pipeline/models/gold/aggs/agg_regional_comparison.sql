@@ -30,7 +30,7 @@ from {{ ref("fct_energy_readings") }}
 where "energy_source" not in ('consumption', 'price_de_lu')
 {% if is_incremental() %}
 and "reading_date" >= (
-    select dateadd(day, -3, max(agg_date)) from {{ this }}
+    select dateadd(day, -7, max(agg_date)) from {{ this }}
 )
 {% endif %}
 group by "reading_date", "region", "region_full"
