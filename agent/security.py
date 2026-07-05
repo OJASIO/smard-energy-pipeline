@@ -48,6 +48,7 @@ BLOCKED_INPUT_PATTERNS = [
 # Keywords that must appear for a question to be energy-related
 # At least one must be present for the question to pass scope check
 ENERGY_KEYWORDS = [
+    # English
     "renewable", "energy", "power", "electricity", "generation",
     "demand", "consumption", "forecast", "anomaly", "anomalies",
     "wind", "solar", "biomass", "hydro", "coal", "gas", "nuclear",
@@ -56,6 +57,15 @@ ENERGY_KEYWORDS = [
     "trend", "share", "percentage", "compare", "comparison",
     "today", "yesterday", "last week", "last month", "last year",
     "recent", "current", "latest", "highest", "lowest",
+    # German
+    "erneuerbar", "energie", "strom", "stromerzeugung", "erzeugung",
+    "nachfrage", "verbrauch", "prognose", "vorhersage",
+    "anomalie", "ungewöhnlich", "wind", "solar", "biomasse",
+    "netz", "anteil", "prozent", "vergleich", "trend",
+    "heute", "gestern", "letzten monat", "letztes jahr", "letzte woche",
+    "aktuell", "aktuell", "höchste", "niedrigste", "deutschland",
+    "erneuerbarer", "energien", "wie war", "wie viel", "wie hat",
+    "welche", "wann", "strom erzeugt", "stromnachfrage",
 ]
 
 GENERIC_SAFE_QUESTIONS = [
