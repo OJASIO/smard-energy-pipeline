@@ -5,12 +5,10 @@ Uses native Streamlit components for Streamlit Cloud compatibility.
 
 import os
 import sys
-import uuid
-import plotly.graph_objects as go
-import streamlit as st
-import pandas as pd
 
-# Streamlit Cloud secrets bridge
+# Streamlit Cloud secrets bridge — must run before ANY other imports
+# so that os.environ is populated before agent modules load
+import streamlit as st
 try:
     for key in ["SNOWFLAKE_ACCOUNT","SNOWFLAKE_USER","SNOWFLAKE_PASSWORD",
                 "SNOWFLAKE_ROLE","SNOWFLAKE_WAREHOUSE","SNOWFLAKE_DATABASE","GROQ_API_KEY"]:
@@ -18,6 +16,10 @@ try:
             os.environ[key] = st.secrets[key]
 except Exception:
     pass
+
+import uuid
+import plotly.graph_objects as go
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "agent"))
 
