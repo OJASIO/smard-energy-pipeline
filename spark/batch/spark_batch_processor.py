@@ -28,7 +28,7 @@ BQ_DATASET = "bronze"
 SF_CONFIG = {
     "account":   "qg17675.europe-west3.gcp",
     "user":      "OJASINDULKAR",
-    "password":  "SmardPipeline2026!",
+    "password":  os.environ.get("SNOWFLAKE_PASSWORD", ""),
     "role":      "TRANSFORMER",
     "warehouse": "COMPUTE_WH",
     "database":  os.environ.get("PIPELINE_ENV", "dev").upper() == "PROD" and "SMARD_PROD" or "SMARD_DEV",
