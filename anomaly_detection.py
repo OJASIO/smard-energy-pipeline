@@ -159,6 +159,9 @@ def main():
         print(top10[["region","metric","ds","y","yhat","yhat_lower",
                       "yhat_upper","anomaly_score","anomaly_type"]].to_string(index=False))
 
+    # Convert date to string to avoid PyArrow/write_pandas timestamp serialization bug
+    output["ds"] = output["ds"].dt.strftime("%Y-%m-%d")
+
     out = output.rename(columns={
         "region":"REGION","ds":"TIMESTAMP","anomaly_score":"ANOMALY_SCORE",
         "is_anomaly":"IS_ANOMALY","anomaly_type":"ANOMALY_TYPE","metric":"ENERGY_METRIC",
@@ -171,7 +174,7 @@ def main():
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS GOLD.ANOMALY_FLAGS (
-            REGION VARCHAR, TIMESTAMP DATE, ANOMALY_SCORE FLOAT,
+            REGION VARCHAR, TIMESTAMP VARCHAR, ANOMALY_SCORE FLOAT,
             IS_ANOMALY BOOLEAN, ANOMALY_TYPE VARCHAR, ENERGY_METRIC VARCHAR,
             VALUE_MW FLOAT, ROLLING_MEAN_MW FLOAT, ROLLING_STD_MW FLOAT,
             MODEL_RUN_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()

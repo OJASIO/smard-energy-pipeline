@@ -208,6 +208,8 @@ def main():
                 "yhat_upper": "UPPER_BOUND",
             }
         )
+        # Convert to string to avoid PyArrow/write_pandas timestamp serialization bug
+        out["TIMESTAMP"] = out["TIMESTAMP"].dt.strftime("%Y-%m-%d")
         all_forecasts.append(out[["REGION", "TIMESTAMP", "PREDICTED_VALUE", "LOWER_BOUND", "UPPER_BOUND"]])
 
     if not all_forecasts:
@@ -222,7 +224,7 @@ def main():
         """
         CREATE TABLE IF NOT EXISTS GOLD.RENEWABLE_FORECAST (
             REGION VARCHAR,
-            TIMESTAMP TIMESTAMP_NTZ,
+            TIMESTAMP VARCHAR,
             PREDICTED_VALUE FLOAT,
             LOWER_BOUND FLOAT,
             UPPER_BOUND FLOAT,

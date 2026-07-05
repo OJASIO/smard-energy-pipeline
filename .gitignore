@@ -11,6 +11,4 @@ terraform/terraform.tfvars
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfstate*
-ingestion/batch/BigQuery
-ingestion/batch/GCS
-ingestion/batch/data-management-2-498012*
+.streamlit/secrets.toml
