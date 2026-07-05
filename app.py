@@ -149,7 +149,9 @@ st.markdown(f"""
   </div>
   <div style="text-align:center">
     <span style="font-size:1.1rem;font-weight:600;color:#fff;font-family:Inter,sans-serif">
-        🇩🇪 German Energy Intelligence</span>
+        <img src="https://flagcdn.com/w20/de.png" width="20" height="14" 
+        style="vertical-align:middle;margin-right:6px;border-radius:2px">
+        German Energy Intelligence</span>
   </div>
   <div style="display:flex;gap:2rem;align-items:center">
     <span style="font-size:0.7rem;color:#7B91B8">
