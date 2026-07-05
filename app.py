@@ -143,11 +143,13 @@ an_cnt  = str(len(an_df)) if an_df is not None else "—"
 st.markdown(f"""
 <div style="background:#0D1F3C;padding:0.7rem 2rem;display:flex;
     align-items:center;justify-content:space-between">
-  <div>
-    <span style="font-size:0.9rem;font-weight:600;color:#fff;font-family:Inter,sans-serif">
-        German Energy Intelligence</span>
-    <span style="font-size:0.7rem;color:#7B91B8;margin-left:0.75rem">
+  <div style="width:200px">
+    <span style="font-size:0.7rem;color:#7B91B8">
         SMARD · Bundesnetzagentur</span>
+  </div>
+  <div style="text-align:center">
+    <span style="font-size:1.1rem;font-weight:600;color:#fff;font-family:Inter,sans-serif">
+        🇩🇪 German Energy Intelligence</span>
   </div>
   <div style="display:flex;gap:2rem;align-items:center">
     <span style="font-size:0.7rem;color:#7B91B8">
