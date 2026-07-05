@@ -298,6 +298,7 @@ with right:
                         unsafe_allow_html=True)
             display = fc_df[["date","predicted_mwh","lower_mwh","upper_mwh"]].copy()
             display.columns = ["Date","Forecast (MWh)","Lower","Upper"]
+            display["Date"] = display["Date"].astype(str).str[:10]
             display["Forecast (MWh)"] = display["Forecast (MWh)"].apply(lambda x: f"{float(x):,.0f}")
             display["Lower"] = display["Lower"].apply(lambda x: f"{float(x):,.0f}")
             display["Upper"] = display["Upper"].apply(lambda x: f"{float(x):,.0f}")
