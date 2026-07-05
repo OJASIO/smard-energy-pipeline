@@ -1,47 +1,45 @@
-"""
-app.py — SMARD German Energy Intelligence Dashboard
-Uses native Streamlit components for Streamlit Cloud compatibility.
-"""
-
-import os
-import sys
-import uuid
+import os, sys, uuid
+import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-import streamlit as st
 
 st.set_page_config(
     page_title="German Energy Intelligence",
-    page_icon="⚡",
-    layout="wide",
+    page_icon="⚡", layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# Secrets bridge — MUST come after set_page_config, before agent imports
+# Secrets bridge
 try:
-    for key in ["SNOWFLAKE_ACCOUNT","SNOWFLAKE_USER","SNOWFLAKE_PASSWORD",
-                "SNOWFLAKE_ROLE","SNOWFLAKE_WAREHOUSE","SNOWFLAKE_DATABASE","GROQ_API_KEY"]:
-        val = st.secrets.get(key, "")
-        if val and not os.environ.get(key):
-            os.environ[key] = val
-except Exception as e:
-    st.warning(f"Secrets not loaded: {e}")
+    for k in ["SNOWFLAKE_ACCOUNT","SNOWFLAKE_USER","SNOWFLAKE_PASSWORD",
+               "SNOWFLAKE_ROLE","SNOWFLAKE_WAREHOUSE","SNOWFLAKE_DATABASE","GROQ_API_KEY"]:
+        if k in st.secrets and not os.environ.get(k):
+            os.environ[k] = st.secrets[k]
+except Exception:
+    pass
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "agent"))
-
 from energy_agent import EnergyAgent, AgentResponse
 from query_templates import run_template
 
-
-
-# Minimal CSS — only what Streamlit Cloud reliably renders
+# CSS
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-section[data-testid="stMain"] { background: #F4F6FA; }
-.block-container { padding: 1rem 2rem 2rem !important; max-width: 100% !important; }
-#MainMenu, footer { display: none !important; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+section[data-testid="stMain"] > div { background: #F7F9FC; }
+.block-container { padding: 0 !important; max-width: 100% !important; }
+#MainMenu, footer, header { display: none !important; }
+div[data-testid="stMetricValue"] { font-size: 1.4rem !important; font-weight: 600 !important; color: #0D1F3C !important; }
+div[data-testid="stMetricLabel"] { font-size: 0.7rem !important; color: #8A98B8 !important; }
+.stTabs [data-baseweb="tab-list"] { gap: 0; border-bottom: 1px solid #DDE1EC; background: transparent; }
+.stTabs [data-baseweb="tab"] { padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 500; color: #5A6A8A; border-bottom: 2px solid transparent; }
+.stTabs [aria-selected="true"] { color: #0B8C6E !important; border-bottom: 2px solid #0B8C6E !important; background: transparent !important; }
+div[data-testid="stForm"] { border: none !important; padding: 0 !important; background: transparent !important; }
+.stTextInput input { border-radius: 6px !important; border: 1.5px solid #DDE1EC !important; font-size: 0.875rem !important; }
+.stTextInput input:focus { border-color: #0B8C6E !important; box-shadow: 0 0 0 3px rgba(11,140,110,0.1) !important; }
+.stFormSubmitButton > button { background: #0D1F3C !important; color: white !important; border: none !important; border-radius: 6px !important; font-weight: 500 !important; font-size: 0.85rem !important; }
+div[data-testid="column"] { padding: 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,177 +50,145 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_live_data():
+def load_data():
     try:
-        fc_df, _, _ = run_template("FORECAST")
-        an_df, _, _ = run_template("ANOMALIES")
-        sh_df, _, _ = run_template("RENEWABLE_SHARE")
-        return fc_df, an_df, sh_df
+        fc, _, _ = run_template("FORECAST")
+        an, _, _ = run_template("ANOMALIES")
+        sh, _, _ = run_template("RENEWABLE_SHARE")
+        return fc, an, sh
     except Exception as e:
-        st.error(f"Data load error: {e}")
         return None, None, None
 
-fc_df, an_df, sh_df = load_live_data()
+fc_df, an_df, sh_df = load_data()
 
-# Plotly chart builders
+# Chart helpers
 def chart_forecast(df):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df["date"], y=df["upper_mwh"], fill=None, mode="lines",
-        line=dict(width=0), showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(
-        x=df["date"], y=df["lower_mwh"], fill="tonexty", mode="lines",
-        line=dict(width=0), fillcolor="rgba(11,140,110,0.12)",
+    fig.add_trace(go.Scatter(x=df["date"], y=df["upper_mwh"], fill=None,
+        mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=df["date"], y=df["lower_mwh"], fill="tonexty",
+        mode="lines", line=dict(width=0), fillcolor="rgba(11,140,110,0.1)",
         showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(
-        x=df["date"], y=df["predicted_mwh"],
-        mode="lines+markers",
-        line=dict(color="#0B8C6E", width=2),
+    fig.add_trace(go.Scatter(x=df["date"], y=df["predicted_mwh"],
+        mode="lines+markers", line=dict(color="#0B8C6E", width=2.5),
         marker=dict(size=5, color="#0B8C6E"),
-        name="Forecast MWh",
-        hovertemplate="%{x}<br>%{y:,.0f} MWh<extra></extra>",
-    ))
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=8, b=0), height=220,
-        font=dict(family="Inter", size=11, color="#5A6A8A"),
-        xaxis=dict(gridcolor="#E8EBF4", linecolor="#DDE1EC"),
-        yaxis=dict(gridcolor="#E8EBF4", linecolor="#DDE1EC"),
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
-        showlegend=False,
-    )
+        hovertemplate="%{x}<br><b>%{y:,.0f} MWh</b><extra></extra>"))
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0,r=0,t=8,b=0), height=240, showlegend=False,
+        font=dict(family="Inter",size=11,color="#8A98B8"),
+        xaxis=dict(gridcolor="#EEF0F7",linecolor="#DDE1EC",tickformat="%b %d"),
+        yaxis=dict(gridcolor="#EEF0F7",linecolor="#DDE1EC",tickformat=",.0f"))
     return fig
 
 def chart_share(df):
-    fig = go.Figure(go.Bar(
-        x=df["date"], y=df["renewable_pct"],
-        marker_color="#0B8C6E", marker_line_width=0, opacity=0.75,
-        hovertemplate="%{x}<br>%{y:.1f}%<extra></extra>",
-    ))
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=8, b=0), height=180,
-        font=dict(family="Inter", size=11, color="#5A6A8A"),
-        xaxis=dict(gridcolor="#E8EBF4", linecolor="#DDE1EC"),
-        yaxis=dict(gridcolor="#E8EBF4", linecolor="#DDE1EC",
-                   ticksuffix="%"),
-        showlegend=False,
-    )
+    fig = go.Figure(go.Bar(x=df["date"], y=df["renewable_pct"],
+        marker_color="#0B8C6E", marker_line_width=0, opacity=0.7,
+        hovertemplate="%{x}<br><b>%{y:.1f}%</b><extra></extra>"))
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0,r=0,t=8,b=0), height=240, showlegend=False,
+        font=dict(family="Inter",size=11,color="#8A98B8"),
+        xaxis=dict(gridcolor="#EEF0F7",linecolor="#DDE1EC"),
+        yaxis=dict(gridcolor="#EEF0F7",linecolor="#DDE1EC",ticksuffix="%"))
     return fig
 
-def chart_response(response):
-    if response.chart_data is None or response.chart_type is None:
+def chart_response(r: AgentResponse):
+    if r.chart_data is None or r.chart_type is None:
         return None
-    df = response.chart_data
-    cfg = response.chart_config
-
-    if response.chart_type == "line":
+    df, cfg = r.chart_data, r.chart_config
+    colors = ["#0B8C6E","#1E3A6E","#D97706","#DC2626"]
+    base = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0,r=0,t=32,b=0), height=260, showlegend=True,
+        font=dict(family="Inter",size=11,color="#8A98B8"),
+        legend=dict(bgcolor="rgba(0,0,0,0)"),
+        title=dict(text=cfg.get("title",""), font=dict(size=11,color="#8A98B8"),x=0),
+        xaxis=dict(gridcolor="#EEF0F7",linecolor="#DDE1EC"),
+        yaxis=dict(gridcolor="#EEF0F7",linecolor="#DDE1EC"))
+    if r.chart_type == "line":
         fig = go.Figure()
-        colors = ["#0B8C6E", "#1E3A6E", "#D97706", "#DC2626"]
-        if "lower" in cfg and cfg.get("lower") and cfg["lower"] in df.columns:
-            fig.add_trace(go.Scatter(
-                x=df[cfg["x"]], y=df[cfg["upper"]], fill=None,
-                mode="lines", line=dict(width=0),
+        if cfg.get("lower") and cfg["lower"] in df.columns:
+            fig.add_trace(go.Scatter(x=df[cfg["x"]], y=df[cfg["upper"]],
+                fill=None, mode="lines", line=dict(width=0),
                 showlegend=False, hoverinfo="skip"))
-            fig.add_trace(go.Scatter(
-                x=df[cfg["x"]], y=df[cfg["lower"]], fill="tonexty",
-                mode="lines", line=dict(width=0),
-                fillcolor="rgba(11,140,110,0.1)",
-                showlegend=False, hoverinfo="skip"))
-        if "color" in cfg and cfg["color"] in df.columns:
-            for i, grp in enumerate(sorted(df[cfg["color"]].unique())):
-                sub = df[df[cfg["color"]] == grp]
-                fig.add_trace(go.Scatter(
-                    x=sub[cfg["x"]], y=sub[cfg["y"]],
-                    mode="lines+markers", name=str(grp),
-                    line=dict(color=colors[i % len(colors)], width=2),
+            fig.add_trace(go.Scatter(x=df[cfg["x"]], y=df[cfg["lower"]],
+                fill="tonexty", mode="lines", line=dict(width=0),
+                fillcolor="rgba(11,140,110,0.1)", showlegend=False, hoverinfo="skip"))
+        if cfg.get("color") and cfg["color"] in df.columns:
+            for i, g in enumerate(sorted(df[cfg["color"]].unique())):
+                s = df[df[cfg["color"]]==g]
+                fig.add_trace(go.Scatter(x=s[cfg["x"]], y=s[cfg["y"]],
+                    mode="lines+markers", name=str(g),
+                    line=dict(color=colors[i%len(colors)],width=2),
                     marker=dict(size=4)))
         else:
-            fig.add_trace(go.Scatter(
-                x=df[cfg["x"]], y=df[cfg["y"]],
-                mode="lines+markers",
-                line=dict(color="#0B8C6E", width=2),
-                marker=dict(size=4)))
-
-    elif response.chart_type == "bar":
-        fig = go.Figure(go.Bar(
-            x=df[cfg["x"]], y=df[cfg["y"]],
+            fig.add_trace(go.Scatter(x=df[cfg["x"]], y=df[cfg["y"]],
+                mode="lines+markers", line=dict(color="#0B8C6E",width=2),
+                marker=dict(size=4), showlegend=False))
+    elif r.chart_type == "bar":
+        fig = go.Figure(go.Bar(x=df[cfg["x"]], y=df[cfg["y"]],
             marker_color="#0B8C6E", marker_line_width=0, opacity=0.8))
-
-    elif response.chart_type == "bar_horizontal":
-        fig = go.Figure(go.Bar(
-            x=df[cfg["x"]], y=df[cfg["y"]],
-            orientation="h",
-            marker_color="#0B8C6E", marker_line_width=0, opacity=0.8))
+    elif r.chart_type == "bar_horizontal":
+        fig = go.Figure(go.Bar(x=df[cfg["x"]], y=df[cfg["y"]],
+            orientation="h", marker_color="#0B8C6E",
+            marker_line_width=0, opacity=0.8))
     else:
         return None
-
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=32, b=0), height=260,
-        font=dict(family="Inter", size=11, color="#5A6A8A"),
-        title=dict(text=cfg.get("title",""), font=dict(size=11, color="#8A98B8"),
-                   x=0, xanchor="left"),
-        xaxis=dict(gridcolor="#E8EBF4", linecolor="#DDE1EC"),
-        yaxis=dict(gridcolor="#E8EBF4", linecolor="#DDE1EC"),
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
-    )
+    fig.update_layout(**base)
     return fig
 
-# ── Header ──
-renewable_pct = f"{float(sh_df.iloc[-1].get('renewable_pct',0)):.1f}%" if sh_df is not None and not sh_df.empty else "—"
-forecast_val  = f"{float(fc_df.iloc[0].get('predicted_mwh',0)):,.0f} MWh" if fc_df is not None and not fc_df.empty else "—"
-anomaly_count = str(len(an_df)) if an_df is not None else "—"
+# ── Nav bar ──
+ren_pct = f"{float(sh_df.iloc[-1]['renewable_pct']):.1f}%" if sh_df is not None and not sh_df.empty else "—"
+fc_val  = f"{float(fc_df.iloc[0]['predicted_mwh']):,.0f} MWh" if fc_df is not None and not fc_df.empty else "—"
+an_cnt  = str(len(an_df)) if an_df is not None else "—"
 
 st.markdown(f"""
-<div style="background:#0D1F3C;padding:0.75rem 2rem;display:flex;
-    align-items:center;justify-content:space-between;margin:-1rem -2rem 0;border-radius:0">
+<div style="background:#0D1F3C;padding:0.7rem 2rem;display:flex;
+    align-items:center;justify-content:space-between">
   <div>
-    <span style="font-family:Inter,sans-serif;font-size:0.9rem;font-weight:600;
-        color:#fff">German Energy Intelligence</span>
+    <span style="font-size:0.9rem;font-weight:600;color:#fff;font-family:Inter,sans-serif">
+        German Energy Intelligence</span>
     <span style="font-size:0.7rem;color:#7B91B8;margin-left:0.75rem">
-        SMARD / Bundesnetzagentur</span>
+        SMARD · Bundesnetzagentur</span>
   </div>
-  <div style="font-size:0.7rem;color:#7B91B8;text-align:right;line-height:1.6">
-    Snowflake Gold Layer · Prophet · LLaMA 3.3<br>Data: 2017–present · Region: DE
+  <div style="display:flex;gap:2rem;align-items:center">
+    <span style="font-size:0.7rem;color:#7B91B8">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;
+            background:#0B8C6E;margin-right:4px;vertical-align:middle"></span>Live
+    </span>
+    <span style="font-size:0.7rem;color:#7B91B8">Renewable share
+        <b style="color:#4DD9B3;margin-left:4px">{ren_pct}</b></span>
+    <span style="font-size:0.7rem;color:#7B91B8">Tomorrow
+        <b style="color:#4DD9B3;margin-left:4px">{fc_val}</b></span>
+    <span style="font-size:0.7rem;color:#7B91B8">Anomalies (90d)
+        <b style="color:#4DD9B3;margin-left:4px">{an_cnt}</b></span>
   </div>
-</div>
-
-<div style="background:#fff;border-bottom:1px solid #DDE1EC;padding:0.5rem 2rem;
-    display:flex;gap:2.5rem;align-items:center;margin:0 -2rem 1.5rem;flex-wrap:wrap">
-  <span style="display:flex;align-items:center;gap:0.4rem">
-    <span style="width:7px;height:7px;border-radius:50%;background:#0B8C6E;display:inline-block"></span>
-    <span style="font-size:0.65rem;color:#8A98B8;font-weight:500;text-transform:uppercase;
-        letter-spacing:0.08em">Live</span>
-  </span>
-  <span style="font-size:0.65rem;color:#8A98B8;text-transform:uppercase;
-      letter-spacing:0.08em">Renewable share
-    <strong style="font-family:'IBM Plex Mono',monospace;color:#0B8C6E;
-        font-size:0.8rem;margin-left:0.3rem">{renewable_pct}</strong>
-  </span>
-  <span style="font-size:0.65rem;color:#8A98B8;text-transform:uppercase;
-      letter-spacing:0.08em">Tomorrow forecast
-    <strong style="font-family:'IBM Plex Mono',monospace;color:#0B8C6E;
-        font-size:0.8rem;margin-left:0.3rem">{forecast_val}</strong>
-  </span>
-  <span style="font-size:0.65rem;color:#8A98B8;text-transform:uppercase;
-      letter-spacing:0.08em">Anomalies (90d)
-    <strong style="font-family:'IBM Plex Mono',monospace;color:#0B8C6E;
-        font-size:0.8rem;margin-left:0.3rem">{anomaly_count}</strong>
-  </span>
+  <div style="font-size:0.65rem;color:#4A5E80;line-height:1.6">
+    Snowflake · Prophet · LLaMA 3.3<br>2017–present · Region: DE
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Two columns ──
-col_left, col_right = st.columns([62, 38], gap="large")
+st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+# ── Main columns ──
+left, right = st.columns([58, 42], gap="large")
 
 # ── LEFT: Q&A ──
-with col_left:
+with left:
+    st.markdown("""
+    <div style="padding:0 1.5rem">
+    <h2 style="font-size:1.1rem;font-weight:600;color:#0D1F3C;margin-bottom:0.25rem">
+        Ask about the German electricity grid</h2>
+    <p style="font-size:0.825rem;color:#5A6A8A;margin-bottom:1.25rem;line-height:1.6">
+        Questions are answered using live data from Snowflake's Gold layer —
+        renewable generation, demand, forecasts, and grid anomalies.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     if not st.session_state.history:
-        st.markdown("### German Energy Intelligence")
-        st.caption("Ask questions about renewable generation, electricity demand, "
-                   "forecasts, and grid anomalies — grounded in live SMARD data.")
-        st.markdown("**Try asking:**")
+        st.markdown("<p style='font-size:0.75rem;font-weight:600;color:#8A98B8;"
+                    "text-transform:uppercase;letter-spacing:0.08em;"
+                    "padding:0 1.5rem'>Suggested questions</p>",
+                    unsafe_allow_html=True)
         hints = [
             "What is the renewable energy forecast for the next 7 days?",
             "Were there any anomalies in the last 90 days?",
@@ -234,125 +200,151 @@ with col_left:
         c1, c2 = st.columns(2)
         for i, h in enumerate(hints):
             (c1 if i % 2 == 0 else c2).markdown(
-                f"<div style='background:#fff;border:1px solid #DDE1EC;border-radius:6px;"
-                f"padding:0.6rem 0.875rem;font-size:0.775rem;color:#3D4F72;"
-                f"margin-bottom:0.4rem;line-height:1.4'>{h}</div>",
+                f"<div style='background:#fff;border:1px solid #DDE1EC;"
+                f"border-radius:8px;padding:0.65rem 0.875rem;font-size:0.775rem;"
+                f"color:#3D4F72;margin-bottom:0.5rem;line-height:1.45;"
+                f"cursor:default'>{h}</div>",
                 unsafe_allow_html=True)
     else:
         for entry in st.session_state.history:
-            q = entry["question"]
-            r = entry["response"]
-
+            q, r = entry["question"], entry["response"]
             st.markdown(
+                f"<div style='padding:0 1.5rem'>"
                 f"<p style='font-size:0.65rem;font-weight:600;color:#8A98B8;"
-                f"text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.2rem'>"
-                f"Question</p>"
-                f"<p style='font-size:0.9rem;font-weight:500;color:#1A2540;"
-                f"margin-bottom:0.75rem'>{q}</p>",
+                f"text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.2rem'>Question</p>"
+                f"<p style='font-size:0.9rem;font-weight:500;color:#0D1F3C;"
+                f"margin-bottom:0.75rem'>{q}</p></div>",
                 unsafe_allow_html=True)
-
             if r.blocked:
                 st.error(r.text)
             else:
                 st.markdown(
-                    f"<div style='background:#fff;border:1px solid #DDE1EC;"
-                    f"border-left:3px solid #0B8C6E;border-radius:0 6px 6px 0;"
-                    f"padding:0.875rem 1.125rem;margin-bottom:0.5rem'>"
+                    f"<div style='margin:0 1.5rem;background:#fff;border:1px solid #DDE1EC;"
+                    f"border-left:3px solid #0B8C6E;border-radius:0 8px 8px 0;"
+                    f"padding:0.875rem 1.125rem;margin-bottom:0.75rem'>"
                     f"<div style='margin-bottom:0.4rem'>"
-                    f"<span style='font-family:IBM Plex Mono,monospace;font-size:0.6rem;"
-                    f"background:#E4F4EF;color:#0B8C6E;border-radius:3px;padding:1px 6px;"
-                    f"font-weight:500'>{r.template_used or 'AGENT'}</span>"
+                    f"<span style='font-size:0.6rem;background:#E4F4EF;color:#0B8C6E;"
+                    f"border-radius:4px;padding:2px 7px;font-weight:600;"
+                    f"letter-spacing:0.05em'>{r.template_used or 'AGENT'}</span>"
                     f"<span style='font-size:0.6rem;color:#8A98B8;margin-left:0.5rem'>"
                     f"{r.latency_ms:.0f} ms</span></div>"
                     f"<div style='font-size:0.875rem;color:#3D4F72;line-height:1.65'>"
                     f"{r.text}</div></div>",
                     unsafe_allow_html=True)
-
                 fig = chart_response(r)
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True,
-                                    config={"displayModeBar": False})
+                    with st.container():
+                        st.markdown("<div style='padding:0 1.5rem'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig, use_container_width=True,
+                                        config={"displayModeBar": False})
+                        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<hr style='border:none;border-top:1px solid #EEF0F7;"
+                        "margin:0.5rem 1.5rem 1rem'>", unsafe_allow_html=True)
 
-            st.divider()
-
-    # Input
+    st.markdown("<div style='padding:0 1.5rem;margin-top:1rem'>", unsafe_allow_html=True)
     remaining = 20 - st.session_state.agent.question_count
-    st.markdown("<p style='font-size:0.7rem;font-weight:500;color:#5A6A8A;"
-                "margin-bottom:0.25rem'>Ask about the German electricity grid</p>",
-                unsafe_allow_html=True)
+    with st.form("qform", clear_on_submit=True):
+        q = st.text_input("question", label_visibility="collapsed",
+                          placeholder="Ask about renewable generation, demand, forecasts, anomalies...")
+        col_btn, col_note = st.columns([2, 5])
+        with col_btn:
+            sub = st.form_submit_button("Ask", type="primary", use_container_width=True)
+        with col_note:
+            st.markdown(f"<p style='font-size:0.65rem;color:#8A98B8;padding-top:0.5rem'>"
+                        f"{remaining} of 20 questions remaining</p>",
+                        unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    with st.form("query_form", clear_on_submit=True):
-        question = st.text_input(
-            label="question",
-            label_visibility="collapsed",
-            placeholder="e.g. What was the renewable share last month?",
-        )
-        submitted = st.form_submit_button("Ask", type="primary")
-
-    st.caption(f"{remaining} of 20 questions remaining this session")
-
-    if submitted and question.strip():
+    if sub and q.strip():
         with st.spinner("Retrieving data..."):
-            response = st.session_state.agent.ask(question.strip())
-        st.session_state.history.append({"question": question.strip(), "response": response})
+            resp = st.session_state.agent.ask(q.strip())
+        st.session_state.history.append({"question": q.strip(), "response": resp})
         st.rerun()
 
-# ── RIGHT: Live data ──
-with col_right:
-    st.markdown("<p style='font-size:0.65rem;font-weight:600;color:#8A98B8;"
-                "text-transform:uppercase;letter-spacing:0.1em;"
-                "border-bottom:1px solid #DDE1EC;padding-bottom:0.4rem;"
-                "margin-bottom:0.75rem'>Renewable generation forecast</p>",
-                unsafe_allow_html=True)
-    if fc_df is not None and not fc_df.empty:
-        st.plotly_chart(chart_forecast(fc_df), use_container_width=True,
-                        config={"displayModeBar": False})
-    else:
-        st.caption("Forecast unavailable")
+# ── RIGHT: Data panel with tabs ──
+with right:
+    st.markdown("""
+    <div style="background:#fff;border:1px solid #DDE1EC;border-radius:10px;
+        padding:1.25rem;height:100%">
+    """, unsafe_allow_html=True)
 
-    if sh_df is not None and not sh_df.empty:
-        last7 = sh_df.tail(7)
-        avg_pct   = float(last7["renewable_pct"].mean())
-        avg_ren   = float(last7["renewable_mwh"].mean())
-        avg_total = float(last7["total_mwh"].mean())
+    tab1, tab2, tab3 = st.tabs(["Forecast", "Renewable share", "Anomalies"])
 
-        st.markdown("<p style='font-size:0.65rem;font-weight:600;color:#8A98B8;"
-                    "text-transform:uppercase;letter-spacing:0.1em;"
-                    "border-bottom:1px solid #DDE1EC;padding-bottom:0.4rem;"
-                    "margin-top:1rem;margin-bottom:0.75rem'>Last 7 days — averages</p>",
+    with tab1:
+        if fc_df is not None and not fc_df.empty:
+            st.plotly_chart(chart_forecast(fc_df), use_container_width=True,
+                            config={"displayModeBar": False})
+            # Key metrics below chart
+            if sh_df is not None and not sh_df.empty:
+                last7 = sh_df.tail(7)
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Renewable share",
+                          f"{float(last7['renewable_pct'].mean()):.1f}%",
+                          help="7-day average")
+                m2.metric("Renewable gen",
+                          f"{float(last7['renewable_mwh'].mean())/1000:.0f} GWh",
+                          help="7-day average daily generation")
+                m3.metric("Total gen",
+                          f"{float(last7['total_mwh'].mean())/1000:.0f} GWh",
+                          help="7-day average daily total")
+            # Forecast table
+            st.markdown("<p style='font-size:0.7rem;font-weight:600;color:#8A98B8;"
+                        "text-transform:uppercase;letter-spacing:0.08em;"
+                        "margin-top:0.75rem;margin-bottom:0.5rem'>14-day outlook</p>",
+                        unsafe_allow_html=True)
+            display = fc_df[["date","predicted_mwh","lower_mwh","upper_mwh"]].copy()
+            display.columns = ["Date","Forecast (MWh)","Lower","Upper"]
+            display["Forecast (MWh)"] = display["Forecast (MWh)"].apply(lambda x: f"{float(x):,.0f}")
+            display["Lower"] = display["Lower"].apply(lambda x: f"{float(x):,.0f}")
+            display["Upper"] = display["Upper"].apply(lambda x: f"{float(x):,.0f}")
+            st.dataframe(display, use_container_width=True, hide_index=True, height=220)
+        else:
+            st.info("Forecast data unavailable")
+
+    with tab2:
+        if sh_df is not None and not sh_df.empty:
+            st.plotly_chart(chart_share(sh_df), use_container_width=True,
+                            config={"displayModeBar": False})
+            st.markdown("<p style='font-size:0.7rem;font-weight:600;color:#8A98B8;"
+                        "text-transform:uppercase;letter-spacing:0.08em;"
+                        "margin-top:0.75rem;margin-bottom:0.5rem'>Daily breakdown</p>",
+                        unsafe_allow_html=True)
+            display = sh_df[["date","renewable_pct","renewable_mwh","total_mwh"]].copy()
+            display.columns = ["Date","Share %","Renewable (MWh)","Total (MWh)"]
+            display["Share %"] = display["Share %"].apply(lambda x: f"{float(x):.1f}%")
+            display["Renewable (MWh)"] = display["Renewable (MWh)"].apply(lambda x: f"{float(x):,.0f}")
+            display["Total (MWh)"] = display["Total (MWh)"].apply(lambda x: f"{float(x):,.0f}")
+            st.dataframe(display, use_container_width=True, hide_index=True, height=240)
+        else:
+            st.info("Renewable share data unavailable")
+
+    with tab3:
+        if an_df is not None and not an_df.empty:
+            st.markdown(f"<p style='font-size:0.825rem;color:#5A6A8A;margin-bottom:0.75rem'>"
+                        f"{len(an_df)} anomalies detected in the last 90 days.</p>",
+                        unsafe_allow_html=True)
+            for _, row in an_df.iterrows():
+                t = str(row.get("type","")).replace("_"," ")
+                severity = float(row.get("severity", 0))
+                color = "#0B8C6E" if "spike" in str(row.get("type","")) else "#D97706"
+                actual = float(row.get("actual_mwh", 0))
+                expected = float(row.get("expected_mwh", 0))
+                st.markdown(
+                    f"<div style='background:#F7F9FC;border:1px solid #DDE1EC;"
+                    f"border-left:3px solid {color};border-radius:0 6px 6px 0;"
+                    f"padding:0.5rem 0.875rem;margin-bottom:0.4rem'>"
+                    f"<div style='display:flex;justify-content:space-between;"
+                    f"align-items:center;margin-bottom:0.2rem'>"
+                    f"<span style='font-size:0.75rem;font-weight:600;color:#1A2540'>"
+                    f"{row.get('date','')}</span>"
+                    f"<span style='font-size:0.7rem;font-weight:500;color:{color}'>"
+                    f"{t}</span></div>"
+                    f"<div style='font-size:0.68rem;color:#8A98B8'>"
+                    f"Actual: {actual:,.0f} MWh · Expected: {expected:,.0f} MWh · "
+                    f"Severity: {severity:.3f}</div>"
+                    f"</div>",
                     unsafe_allow_html=True)
+        else:
+            st.success("No anomalies detected in the last 90 days.")
 
-        m1, m2 = st.columns(2)
-        m1.metric("Renewable share", f"{avg_pct:.1f}%")
-        m2.metric("Renewable gen", f"{avg_ren/1000:.0f} GWh")
-        m3, m4 = st.columns(2)
-        m3.metric("Total generation", f"{avg_total/1000:.0f} GWh")
-        m4.metric("Anomalies (90d)", anomaly_count)
-
-        st.markdown("<p style='font-size:0.65rem;font-weight:600;color:#8A98B8;"
-                    "text-transform:uppercase;letter-spacing:0.1em;"
-                    "border-bottom:1px solid #DDE1EC;padding-bottom:0.4rem;"
-                    "margin-top:1rem;margin-bottom:0.75rem'>Renewable share — 30-day trend</p>",
-                    unsafe_allow_html=True)
-        st.plotly_chart(chart_share(sh_df), use_container_width=True,
-                        config={"displayModeBar": False})
-
-    if an_df is not None and not an_df.empty:
-        st.markdown("<p style='font-size:0.65rem;font-weight:600;color:#8A98B8;"
-                    "text-transform:uppercase;letter-spacing:0.1em;"
-                    "border-bottom:1px solid #DDE1EC;padding-bottom:0.4rem;"
-                    "margin-top:1rem;margin-bottom:0.75rem'>Detected anomalies</p>",
-                    unsafe_allow_html=True)
-        for _, row in an_df.head(8).iterrows():
-            t = str(row.get("type","")).replace("_"," ")
-            color = "#0B8C6E" if "spike" in str(row.get("type","")) else "#D97706"
-            st.markdown(
-                f"<div style='background:#F4F6FA;border:1px solid #DDE1EC;"
-                f"border-left:3px solid {color};border-radius:0 5px 5px 0;"
-                f"padding:0.4rem 0.7rem;margin-bottom:0.3rem;"
-                f"display:flex;justify-content:space-between;align-items:center'>"
-                f"<span style='font-size:0.7rem;color:#5A6A8A;font-family:IBM Plex Mono,monospace'>"
-                f"{row.get('date','')}</span>"
-                f"<span style='font-size:0.7rem;font-weight:500;color:#3D4F72'>{t}</span>"
-                f"</div>",
-                unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
