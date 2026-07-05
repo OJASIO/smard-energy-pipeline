@@ -20,7 +20,7 @@ from audit_logger import log_event, log_blocked_input
 from query_templates import run_template
 from prompts import build_system_prompt, INTENT_PROMPT, format_context
 
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 MODEL_NAME   = "llama-3.3-70b-versatile"
 
 MAX_QUESTIONS_PER_SESSION    = 20

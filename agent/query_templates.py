@@ -10,19 +10,20 @@ import os
 import pandas as pd
 import snowflake.connector
 
-SF_CONFIG = {
-    "account":   os.environ.get("SNOWFLAKE_ACCOUNT", "qg17675.europe-west3.gcp"),
-    "user":      os.environ["SNOWFLAKE_USER"],
-    "password":  os.environ["SNOWFLAKE_PASSWORD"],
-    "role":      "LLM_AGENT_READONLY",
-    "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
-    "database":  os.environ.get("SNOWFLAKE_DATABASE", "SMARD_PROD"),
-    "schema":    "GOLD",
-}
+def _get_sf_config():
+    return {
+        "account":   os.environ.get("SNOWFLAKE_ACCOUNT", "qg17675.europe-west3.gcp"),
+        "user":      os.environ["SNOWFLAKE_USER"],
+        "password":  os.environ["SNOWFLAKE_PASSWORD"],
+        "role":      "LLM_AGENT_READONLY",
+        "warehouse": os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
+        "database":  os.environ.get("SNOWFLAKE_DATABASE", "SMARD_PROD"),
+        "schema":    "GOLD",
+    }
 
 
 def _run_query(sql: str) -> pd.DataFrame:
-    conn = snowflake.connector.connect(**SF_CONFIG)
+    conn = snowflake.connector.connect(**_get_sf_config())
     try:
         # Disable Arrow iterator — use JSON format to avoid PyArrow
         # timestamp conversion bug on Python 3.12 / Snowflake connector
